@@ -1,5 +1,6 @@
 #include "ervan/coro.hpp"
 #include "ervan/epoll.hpp"
+#include "ervan/log.hpp"
 #include "ervan/main/monitor.hpp"
 #include "ervan/smtp.hpp"
 
@@ -13,12 +14,15 @@ namespace ervan::main {
         epoll_signal& signal_handle = mon.get_epoll_handle();
         sigset_t      mask;
 
+        eipc::set_root("./eipc/");
+        log::out.set_name("monitor");
+
         sigemptyset(&mask);
         sigaddset(&mask, SIGCHLD);
         sigprocmask(SIG_BLOCK, &mask, nullptr);
 
         handler.add(&signal_handle);
-        mon.add("smtp", smtp::main_async);
+        mon.add("ervan.smtp", smtp::main_async);
 
         for (;;)
             handler.poll();

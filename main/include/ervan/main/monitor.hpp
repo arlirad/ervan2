@@ -5,6 +5,7 @@
 
 namespace ervan::main {
     struct monitor_entry {
+        const char*                name;
         std::function<coro<int>()> main;
         pid_t                      pid;
     };
@@ -24,7 +25,7 @@ namespace ervan::main {
         std::vector<monitor_entry> _entries;
 
         void  signal(signalfd_siginfo& info);
-        pid_t enter(std::function<coro<int>()> func);
+        pid_t enter(const char* name, std::function<coro<int>()> func);
     };
 
 }
