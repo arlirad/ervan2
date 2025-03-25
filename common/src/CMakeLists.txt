@@ -1,1 +1,1 @@
-add_library(common common.cpp)
+add_library(common epoll.cpp signal.cpp)

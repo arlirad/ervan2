@@ -1,2 +1,2 @@
-add_executable(ervan main.cpp)
-# target_link_libraries(ervan eipc)
+add_executable(ervan main.cpp monitor.cpp)
+target_link_libraries(ervan common smtp)
