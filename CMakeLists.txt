@@ -15,4 +15,6 @@ add_subdirectory(eipc)
 add_subdirectory(main)
 add_subdirectory(smtp)
 
+add_subdirectory(tests)
+
 set_target_properties(ervan PROPERTIES LINKER_LANGUAGE CXX)

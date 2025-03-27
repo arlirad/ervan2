@@ -40,13 +40,16 @@ namespace ervan::main {
     }
 
     pid_t monitor::enter(const char* name, std::function<coro<int>()> main) {
-        pid_t pid = fork();
+        /*pid_t pid = fork();
 
         if (pid == 0) {
             prctl(PR_SET_NAME, name);
             main().handle.resume();
         }
 
-        return pid;
+        return pid;*/
+
+        std::thread* debug_thread = new std::thread([main]() { main().handle.resume(); });
+        return 0;
     }
 }

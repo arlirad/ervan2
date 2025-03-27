@@ -1,14 +1,51 @@
 #pragma once
 
 #include "eipc.hpp"
+#include "ervan/coro.hpp"
 #include <sys/epoll.h>
 #include <sys/signalfd.h>
 
+#include <functional>
+#include <optional>
+
 namespace ervan {
+    class epoll_handle;
+
+    class epoll_handler {
+        public:
+        static const int MAX_EVENTS = 32;
+
+        epoll_handler();
+
+        template <typename T, typename... U>
+        void spawn(T&& f, U&&... args) {
+            call_def(f, args...);
+        }
+
+        void add(epoll_handle* handle);
+        void remove(epoll_handle* handle);
+        void poll();
+
+        private:
+        int                                  _fd;
+        epoll_event                          _events[MAX_EVENTS];
+        std::vector<epoll_handle*>           _handles;
+        std::vector<std::coroutine_handle<>> to_cleanup;
+
+        template <typename T, typename... U>
+        coro<deferred> call_def(T&& f, U&&... args) {
+            auto c = f(args...);
+            co_await c;
+
+            auto handle = co_await coro_get_handle();
+            to_cleanup.push_back(handle);
+        }
+    };
+
     class epoll_handle {
         public:
-        virtual int  get_fd() = 0;
-        virtual void handle() = 0;
+        virtual int  get_fd()                = 0;
+        virtual void handle(uint32_t events) = 0;
     };
 
     class epoll_endpoint : public epoll_handle {
@@ -19,7 +56,10 @@ namespace ervan {
             return this->_ep.native_handle;
         }
 
-        void handle() {
+        void handle(uint32_t events) {
+            if (!(events & EPOLLIN))
+                return;
+
             while (this->_ep.try_receive())
                 ;
         }
@@ -36,25 +76,31 @@ namespace ervan {
             return _fd;
         }
 
-        void handle();
+        void handle(uint32_t events);
 
         private:
         std::function<void(int, signalfd_siginfo&)> _cb;
         int                                         _fd;
     };
 
-    struct epoll_handler {
+    class epoll_socket : public epoll_handle {
         public:
-        static const int MAX_EVENTS = 32;
+        epoll_socket(int fd);
 
-        epoll_handler();
+        constexpr int get_fd() {
+            return _fd;
+        }
 
-        void add(epoll_handle* handle);
-        void poll();
+        void handle(uint32_t events);
+
+        int                               listen(int backlog);
+        coro<std::optional<epoll_socket>> accept();
+
+        coro<ssize_t> recv(void* buffer, size_t size);
 
         private:
-        int                        _fd;
-        epoll_event                _events[MAX_EVENTS];
-        std::vector<epoll_handle*> _handles;
+        int               _fd;
+        await_handle<int> _send_handle;
+        await_handle<int> _recv_handle;
     };
 }

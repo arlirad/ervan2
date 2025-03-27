@@ -31,10 +31,8 @@ namespace ervan::main {
     }
 
     extern "C" int main() {
-        auto main_coro = main_async();
-
-        main_coro.handle.resume();
-
-        return main_coro.get_value();
+        auto a = main_async();
+        a.handle.resume();
+        return a.get_value();
     }
 }

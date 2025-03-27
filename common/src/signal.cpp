@@ -14,7 +14,10 @@ namespace ervan {
         this->_fd = signalfd(-1, &sigset, SFD_NONBLOCK);
     }
 
-    void epoll_signal::handle() {
+    void epoll_signal::handle(uint32_t events) {
+        if (!(events & EPOLLIN))
+            return;
+
         signalfd_siginfo siginfo;
 
         if (read(this->_fd, &siginfo, sizeof(siginfo)) == -1)
