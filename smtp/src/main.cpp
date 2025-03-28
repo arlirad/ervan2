@@ -13,14 +13,16 @@ namespace ervan::smtp {
     eaio::dispatcher dispatcher;
 
     eaio::coro<void> handle(eaio::socket sock) {
-        log::out << "handling";
+        const char greeter[] = "220 www.example.com SMTP ready\r\n";
+
+        co_await sock.send(greeter, sizeof(greeter));
 
         for (;;) {
             char buffer[32] = {};
             auto result     = co_await sock.recv(buffer, sizeof(buffer));
 
             if (!result) {
-                log::out << "errored";
+                log::out << result.perror("recv");
                 break;
             }
 
@@ -37,11 +39,11 @@ namespace ervan::smtp {
         for (;;) {
             auto client_try = co_await sock.accept();
             if (!client_try) {
-                log::out << std::format("accept: {}", strerror(client_try.error));
+                log::out << client_try.perror("accept");
                 co_return;
             }
 
-            log::out << "new client";
+            log::out << "New connection.";
             dispatcher.spawn(handle, client_try.returned_handle);
         }
     }
@@ -62,18 +64,16 @@ namespace ervan::smtp {
         auto sock    = dispatcher.wrap<eaio::socket>(sock_fd);
 
         auto setsockopt_result = sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, true);
-
-        log::out << std::format("setsockopt: {} ({})", setsockopt_result.value,
-                                strerror(setsockopt_result.error));
+        if (!setsockopt_result)
+            log::out << setsockopt_result.perror("setsockopt");
 
         auto bind_result = sock.bind(addr);
+        if (!bind_result)
+            log::out << bind_result.perror("bind");
 
-        log::out << std::format("bind: {} ({})", bind_result.value, strerror(bind_result.error));
-
-        auto listen_result = sock.listen(10);
-
-        log::out << std::format("listen: {} ({})", listen_result.value,
-                                strerror(bind_result.error));
+        auto listen_result = sock.listen(32);
+        if (!listen_result)
+            log::out << listen_result.perror("listen");
 
         dispatcher.spawn(listen, sock);
 

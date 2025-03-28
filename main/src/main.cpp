@@ -8,6 +8,20 @@
 #include <unistd.h>
 
 namespace ervan::main {
+    /*eaio::coro<void> interrupt_signal(eaio::dispatcher& d) {
+        sigset_t mask;
+
+        sigemptyset(&mask);
+        sigaddset(&mask, SIGINT);
+        sigprocmask(SIG_BLOCK, &mask, nullptr);
+
+        int  sfd    = signalfd(-1, &mask, SFD_CLOEXEC);
+        auto signal = d.wrap<eaio::signal>(sfd);
+
+        co_await signal.get();
+        log::out << "Got sigint.";
+    }*/
+
     eaio::coro<int> main_async() {
         eaio::dispatcher dispatcher;
         eaio::signal     signal_reader;
@@ -25,6 +39,7 @@ namespace ervan::main {
         mon.add("ervan.smtp", ervan::smtp::main_async);
 
         dispatcher.spawn([&mon]() -> eaio::coro<void> { co_await mon.loop(); });
+        // dispatcher.spawn(interrupt_signal, dispatcher);
 
         for (;;)
             dispatcher.poll();
