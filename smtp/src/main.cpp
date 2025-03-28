@@ -1,6 +1,5 @@
+#include "eaio.hpp"
 #include "eipc.hpp"
-#include "ervan/coro.hpp"
-#include "ervan/epoll.hpp"
 #include "ervan/log.hpp"
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -11,44 +10,43 @@
 #include <unistd.h>
 
 namespace ervan::smtp {
-    epoll_handler handler;
+    eaio::dispatcher dispatcher;
 
-    coro<int> handle(epoll_socket sock) {
+    eaio::coro<void> handle(eaio::socket sock) {
         log::out << "handling";
-        handler.add(&sock);
 
         for (;;) {
-            char    buffer[32] = {};
-            ssize_t len        = co_await sock.recv(buffer, sizeof(buffer));
+            char buffer[32] = {};
+            auto result     = co_await sock.recv(buffer, sizeof(buffer));
 
-            if (len == 0)
+            if (!result) {
+                log::out << "errored";
                 break;
+            }
+
+            if (result.len == 0) {
+                log::out << "done";
+                break;
+            }
 
             log::out << buffer;
         }
-
-        handler.remove(&sock);
-
-        co_return 0;
     }
 
-    coro<int> listen(epoll_socket& sock) {
-        handler.add(&sock);
-
+    eaio::coro<void> listen(eaio::socket sock) {
         for (;;) {
             auto client_try = co_await sock.accept();
-            if (!client_try.has_value()) {
-                log::out << std::format("accept: {}", strerror(errno));
-                co_return 0;
+            if (!client_try) {
+                log::out << std::format("accept: {}", strerror(client_try.error));
+                co_return;
             }
 
-            handler.spawn(handle, client_try.value());
+            log::out << "new client";
+            dispatcher.spawn(handle, client_try.returned_handle);
         }
-
-        handler.remove(&sock);
     }
 
-    coro<int> main_async() {
+    eaio::coro<int> main_async() {
         mkdir("./ingoing/", 0700);
         mkdir("./outgoing/", 0700);
 
@@ -60,24 +58,27 @@ namespace ervan::smtp {
         addr.sin_addr.s_addr = htonl(INADDR_ANY);
         addr.sin_port        = htons(2525);
 
-        int sock   = socket(AF_INET, SOCK_STREAM, 0);
-        int enable = 1;
+        int  sock_fd = socket(AF_INET, SOCK_STREAM, 0);
+        auto sock    = dispatcher.wrap<eaio::socket>(sock_fd);
 
-        setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable));
+        auto setsockopt_result = sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, true);
 
-        int bind_result = bind(sock, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+        log::out << std::format("setsockopt: {} ({})", setsockopt_result.value,
+                                strerror(setsockopt_result.error));
 
-        log::out << std::format("bind: {} ({})", bind_result, strerror(errno));
+        auto bind_result = sock.bind(addr);
 
-        epoll_socket listen_sock(sock);
-        int          listen_result = listen_sock.listen(10);
+        log::out << std::format("bind: {} ({})", bind_result.value, strerror(bind_result.error));
 
-        log::out << std::format("listen: {} ({})", bind_result, strerror(errno));
+        auto listen_result = sock.listen(10);
 
-        handler.spawn(listen, listen_sock);
+        log::out << std::format("listen: {} ({})", listen_result.value,
+                                strerror(bind_result.error));
+
+        dispatcher.spawn(listen, sock);
 
         for (;;)
-            handler.poll();
+            dispatcher.poll();
 
         co_return 0;
     }

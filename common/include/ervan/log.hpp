@@ -1,9 +1,12 @@
 #pragma once
 
 #include <ctime>
+#include <format>
 #include <iostream>
 
 namespace ervan::log {
+    using std::format;
+
     class log_output {
         public:
         log_output();

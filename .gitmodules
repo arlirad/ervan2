@@ -1,3 +1,6 @@
 [submodule "eipc"]
 	path = eipc
 	url = https://github.com/arlirad/libeipc
+[submodule "eaio"]
+	path = eaio
+	url = https://github.com/arlirad/libeaio

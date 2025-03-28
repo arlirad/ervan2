@@ -1,7 +1,7 @@
 #pragma once
 
-#include "ervan/coro.hpp"
+#include "eaio.hpp"
 
 namespace ervan::smtp {
-    coro<int> main_async();
+    eaio::coro<int> main_async();
 }

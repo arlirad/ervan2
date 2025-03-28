@@ -1,5 +1,5 @@
-#include "ervan/coro.hpp"
-#include "ervan/epoll.hpp"
+#include "eaio.hpp"
+#include "eipc.hpp"
 #include "ervan/log.hpp"
 #include "ervan/main/monitor.hpp"
 #include "ervan/smtp.hpp"
@@ -8,11 +8,11 @@
 #include <unistd.h>
 
 namespace ervan::main {
-    coro<int> main_async() {
-        monitor       mon;
-        epoll_handler handler;
-        epoll_signal& signal_handle = mon.get_epoll_handle();
-        sigset_t      mask;
+    eaio::coro<int> main_async() {
+        eaio::dispatcher dispatcher;
+        eaio::signal     signal_reader;
+        monitor          mon(dispatcher);
+        sigset_t         mask;
 
         eipc::set_root("./eipc/");
         log::out.set_name("monitor");
@@ -21,11 +21,13 @@ namespace ervan::main {
         sigaddset(&mask, SIGCHLD);
         sigprocmask(SIG_BLOCK, &mask, nullptr);
 
-        handler.add(&signal_handle);
-        mon.add("ervan.smtp", smtp::main_async);
+        mon.debug(true);
+        mon.add("ervan.smtp", ervan::smtp::main_async);
+
+        dispatcher.spawn([&mon]() -> eaio::coro<void> { co_await mon.loop(); });
 
         for (;;)
-            handler.poll();
+            dispatcher.poll();
 
         co_return 0;
     }

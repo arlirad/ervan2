@@ -7,15 +7,18 @@
 #include <format>
 #include <functional>
 #include <signal.h>
+#include <string.h>
+#include <thread>
 #include <unistd.h>
 
-
 namespace ervan::main {
-    monitor::monitor()
-        : _epoll_signal(
-              epoll_signal(SIGCHLD, [this](int, signalfd_siginfo& info) { this->signal(info); })) {}
+    monitor::monitor(eaio::dispatcher& d) : _d(d) {}
 
-    void monitor::add(const char* name, std::function<coro<int>()> main) {
+    void monitor::debug(bool v) {
+        this->_debug = v;
+    }
+
+    void monitor::add(const char* name, std::function<eaio::coro<int>()> main) {
         monitor_entry& entry = this->_entries.emplace_back(monitor_entry{
             .name = name,
             .main = main,
@@ -32,24 +35,51 @@ namespace ervan::main {
             int exit_code;
             int pid = waitpid(info.ssi_pid, &exit_code, WNOHANG);
 
-            log::out << std::format("Process '{}' ({}) terminated with code {}, signal '{}'.",
+            log::out << log::format("Process '{}' ({}) terminated with code {}, signal '{}'.",
                                     entry.name, entry.pid, exit_code, strsignal(exit_code));
 
             entry.pid = enter(entry.name, entry.main);
         }
     }
 
-    pid_t monitor::enter(const char* name, std::function<coro<int>()> main) {
-        /*pid_t pid = fork();
+    eaio::coro<void> monitor::loop() {
+        sigset_t mask;
+
+        sigemptyset(&mask);
+        sigaddset(&mask, SIGCHLD);
+        sigprocmask(SIG_BLOCK, &mask, nullptr);
+
+        int  sfd    = signalfd(-1, &mask, SFD_CLOEXEC);
+        auto signal = this->_d.wrap<eaio::signal>(sfd);
+
+        for (;;) {
+            auto result = co_await signal.get();
+            if (!result) {
+                log::out << "signalfd loop failed!";
+                break;
+            }
+
+            this->signal(result.info);
+        }
+    }
+
+    pid_t monitor::enter(const char* name, std::function<eaio::coro<int>()> main) {
+        if (this->_debug) {
+            std::thread* debug_thread = new std::thread([main]() { main().handle.resume(); });
+            log::out << log::format("Spawned thread '{}'.", name);
+
+            return 0;
+        }
+
+        pid_t pid = fork();
 
         if (pid == 0) {
             prctl(PR_SET_NAME, name);
             main().handle.resume();
         }
 
-        return pid;*/
+        log::out << log::format("Spawned process '{}' ({}).", name, pid);
 
-        std::thread* debug_thread = new std::thread([main]() { main().handle.resume(); });
-        return 0;
+        return pid;
     }
 }

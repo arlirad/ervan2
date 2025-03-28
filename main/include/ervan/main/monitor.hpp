@@ -1,31 +1,31 @@
 #pragma once
 
-#include "ervan/coro.hpp"
-#include "ervan/epoll.hpp"
+#include "eaio.hpp"
+
+#include <functional>
 
 namespace ervan::main {
     struct monitor_entry {
-        const char*                name;
-        std::function<coro<int>()> main;
-        pid_t                      pid;
+        const char*                      name;
+        std::function<eaio::coro<int>()> main;
+        pid_t                            pid;
     };
 
     class monitor {
         public:
-        monitor();
+        monitor(eaio::dispatcher& d);
 
-        void add(const char* name, std::function<coro<int>()> main);
-
-        epoll_signal& get_epoll_handle() {
-            return _epoll_signal;
-        }
+        void             debug(bool v);
+        void             add(const char* name, std::function<eaio::coro<int>()> main);
+        eaio::coro<void> loop();
 
         private:
-        epoll_signal               _epoll_signal;
+        eaio::dispatcher&          _d;
         std::vector<monitor_entry> _entries;
+        bool                       _debug;
 
         void  signal(signalfd_siginfo& info);
-        pid_t enter(const char* name, std::function<coro<int>()> func);
+        pid_t enter(const char* name, std::function<eaio::coro<int>()> func);
     };
 
 }
