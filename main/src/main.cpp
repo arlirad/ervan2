@@ -33,7 +33,7 @@ namespace ervan::main {
             auto request = request_try.value();
 
             if (request.function() == FUNC_READCONFIG) {
-                auto key_list = request.get<config_key_list>();
+                auto key_list = request.get<config_key_list<>>();
 
                 log::out << log::format("key count: {}", key_list.count);
 

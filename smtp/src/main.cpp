@@ -13,8 +13,8 @@
 #include <unistd.h>
 
 namespace ervan::smtp {
-    eaio::dispatcher dispatcher;
-    local_config     cfg;
+    eaio::dispatcher       dispatcher;
+    constinit local_config cfg;
 
     eaio::coro<void> handle_eipc(eipc::endpoint& ep) {
         for (;;) {
@@ -31,10 +31,10 @@ namespace ervan::smtp {
     }
 
     eaio::coro<void> handle(eaio::socket sock) {
-        auto       hostname  = cfg.get<config_hostname>();
-        const char greeter[] = "220 www.example.com SMTP ready\r\n";
+        auto hostname = cfg.get<config_hostname>();
+        auto greeter  = std::format("220 {} SMTP Ervan 2 ready\r\n", hostname);
 
-        co_await sock.send(greeter, sizeof(greeter));
+        co_await sock.send(greeter.c_str(), greeter.size());
 
         for (;;) {
             char buffer[32] = {};
@@ -55,6 +55,11 @@ namespace ervan::smtp {
     }
 
     eaio::coro<void> listen(eaio::socket sock) {
+        if (!cfg.ensure<config_hostname>()) {
+            log::out << "Hostname is not set!";
+            co_return;
+        }
+
         log::out << log::format("Listening as '{}'.", cfg.get<config_hostname>());
 
         for (;;) {
@@ -72,11 +77,7 @@ namespace ervan::smtp {
     eaio::coro<void> start(eipc::endpoint& ep) {
         dispatcher.spawn(handle_eipc, ep);
 
-        co_await ep.request_async(FUNC_READCONFIG, config_key_list{
-                                                       config_hostname::id,
-                                                       config_port::id,
-                                                       config_submissionport::id,
-                                                   });
+        co_await ep.request_async(FUNC_READCONFIG, cfg.key_list);
 
         sockaddr_in addr = {};
 
