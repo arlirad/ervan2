@@ -1,5 +1,7 @@
 #include "eaio.hpp"
 #include "eipc.hpp"
+#include "ervan/config.hpp"
+#include "ervan/ipc.hpp"
 #include "ervan/log.hpp"
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -10,7 +12,22 @@
 #include <unistd.h>
 
 namespace ervan::smtp {
-    eaio::dispatcher dispatcher;
+    eaio::dispatcher                                            dispatcher;
+    config<config_hostname, config_port, config_submissionport> cfg;
+
+    eaio::coro<void> handle_eipc(eipc::endpoint& ep) {
+        for (;;) {
+            auto request_try = co_await ep.recv_request();
+            if (!request_try)
+                break;
+
+            auto request = request_try.value();
+
+            if (request.function() == FUNC_WRITECONFIGKEY) {
+                //
+            }
+        }
+    }
 
     eaio::coro<void> handle(eaio::socket sock) {
         const char greeter[] = "220 www.example.com SMTP ready\r\n";
@@ -48,11 +65,14 @@ namespace ervan::smtp {
         }
     }
 
-    eaio::coro<int> main_async() {
-        mkdir("./ingoing/", 0700);
-        mkdir("./outgoing/", 0700);
+    eaio::coro<void> start(eipc::endpoint& ep) {
+        dispatcher.spawn(handle_eipc, ep);
 
-        log::out.set_name("smtp");
+        co_await ep.request_async(FUNC_READCONFIG, config_key_list{
+                                                       config_hostname::id,
+                                                       config_port::id,
+                                                       config_submissionport::id,
+                                                   });
 
         sockaddr_in addr = {};
 
@@ -76,6 +96,21 @@ namespace ervan::smtp {
             log::out << listen_result.perror("listen");
 
         dispatcher.spawn(listen, sock);
+    }
+
+    eaio::coro<int> main_async() {
+        eipc::endpoint ep("smtp->monitor");
+
+        mkdir("./ingoing/", 0700);
+        mkdir("./outgoing/", 0700);
+
+        log::out.set_name("smtp");
+
+        ep.init("monitor->smtp");
+
+        dispatcher.spawn(start, ep);
+
+        auto ep_wrapped = wrap_endpoint(dispatcher, ep);
 
         for (;;)
             dispatcher.poll();
