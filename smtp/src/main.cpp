@@ -3,6 +3,7 @@
 #include "ervan/config.hpp"
 #include "ervan/ipc.hpp"
 #include "ervan/log.hpp"
+#include "ervan/smtp.hpp"
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -12,8 +13,8 @@
 #include <unistd.h>
 
 namespace ervan::smtp {
-    eaio::dispatcher                                            dispatcher;
-    config<config_hostname, config_port, config_submissionport> cfg;
+    eaio::dispatcher dispatcher;
+    local_config     cfg;
 
     eaio::coro<void> handle_eipc(eipc::endpoint& ep) {
         for (;;) {
@@ -30,6 +31,7 @@ namespace ervan::smtp {
     }
 
     eaio::coro<void> handle(eaio::socket sock) {
+        auto       hostname  = cfg.get<config_hostname>();
         const char greeter[] = "220 www.example.com SMTP ready\r\n";
 
         co_await sock.send(greeter, sizeof(greeter));
@@ -53,6 +55,8 @@ namespace ervan::smtp {
     }
 
     eaio::coro<void> listen(eaio::socket sock) {
+        log::out << log::format("Listening as '{}'.", cfg.get<config_hostname>());
+
         for (;;) {
             auto client_try = co_await sock.accept();
             if (!client_try) {

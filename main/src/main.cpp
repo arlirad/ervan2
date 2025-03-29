@@ -36,6 +36,9 @@ namespace ervan::main {
                 auto key_list = request.get<config_key_list>();
 
                 log::out << log::format("key count: {}", key_list.count);
+
+                auto finalized = eipc::response();
+                ep.respond(request, finalized);
             }
         }
     }
