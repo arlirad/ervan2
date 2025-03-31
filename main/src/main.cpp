@@ -89,6 +89,9 @@ namespace ervan::main {
             std::string key(key_start, key_end);
             std::string value(value_start, value_end);
 
+            if (key[0] == '#')
+                continue;
+
             if (!cfg.exists(key)) {
                 log::out << log::format("Unknown config parameter '{}'.", key);
                 continue;

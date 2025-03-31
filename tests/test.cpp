@@ -9,6 +9,9 @@ auto       term_sp       = ervan::span(terminator, 2);
 const char terminator_long[5] = {'\r', '\n', '.', '\r', '\n'};
 auto       term_l_sp          = ervan::span(terminator_long, 5);
 
+const char escape[4] = {'\r', '\n', '.', '.'};
+auto       escape_sp = ervan::span(escape, 4);
+
 TEST(BufferTests, BufferJoinContinuousTest) {
     char buffer[8];
     int  offset = 0;
@@ -230,4 +233,47 @@ TEST(BufferTests, BufferJoinLongTerminatorTest) {
     ASSERT_EQ(result.rest.size(), 4);
     ASSERT_TRUE(std::strcmp(buffer, "aaa") == 0);
     ASSERT_EQ(offset, 0);
+}
+
+TEST(BufferTests, BufferLookEscapeTest) {
+    char buffer[5];
+    int  offset = 0;
+
+    auto part = "aaa\r\n..\r\nbbbb\r\n.\r\n";
+
+    auto result = look(ervan::span(buffer, sizeof(buffer)), ervan::span(part, 18), 32, offset,
+                       term_sp, escape_sp);
+
+    ASSERT_TRUE(result.escape);
+    ASSERT_EQ(result.sp.begin(), part);
+    ASSERT_EQ(result.sp.size(), 6);
+    ASSERT_EQ(result.rest.begin(), part + 7);
+    ASSERT_EQ(result.rest.size(), 11);
+    ASSERT_EQ(offset, 7);
+}
+
+TEST(BufferTests, BufferLookBrokenEscapeTest) {
+    char buffer[5];
+    int  offset = 0;
+
+    auto part = "aaa\r\n.";
+
+    auto result = look(ervan::span(buffer, sizeof(buffer)), ervan::span(part, 6), 32, offset,
+                       term_sp, escape_sp);
+
+    ASSERT_FALSE(result.escape);
+    ASSERT_EQ(result.sp.begin(), nullptr);
+    ASSERT_EQ(result.sp.size(), 0);
+    ASSERT_EQ(result.rest.begin(), part + 6);
+    ASSERT_EQ(result.rest.size(), 0);
+    ASSERT_EQ(offset, 6);
+
+    auto part2   = ".\r\nbbbb\r\n.\r\n";
+    auto result2 = look(ervan::span(buffer, sizeof(buffer)), ervan::span(part2, 12), 32, offset,
+                        term_sp, escape_sp);
+
+    ASSERT_EQ(result2.sp.begin(), part2);
+    ASSERT_EQ(result2.sp.size(), 0);
+    ASSERT_EQ(result2.rest.begin(), part2 + 1);
+    ASSERT_EQ(result2.rest.size(), 11);
 }

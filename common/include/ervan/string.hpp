@@ -3,6 +3,7 @@
 #include <system_error>
 
 #include <optional>
+#include <string>
 #include <tuple>
 #include <unistd.h>
 
@@ -74,11 +75,41 @@ namespace ervan {
         }
     };
 
+    struct loop_result {
+        span<const char> sp;
+        span<const char> rest;
+        std::errc        ec;
+        bool             escape;
+
+        loop_result() {
+            this->sp     = {};
+            this->rest   = {};
+            this->ec     = {};
+            this->escape = false;
+        }
+
+        loop_result(span<const char> _sp, span<const char> _rest, bool _escape = false) {
+            this->sp     = _sp;
+            this->rest   = _rest;
+            this->ec     = {};
+            this->escape = _escape;
+        }
+
+        loop_result(std::errc _ec, span<const char> _rest, bool _escape = false) {
+            this->sp     = {};
+            this->ec     = _ec;
+            this->rest   = _rest;
+            this->escape = _escape;
+        }
+    };
+
     std::tuple<const char*, const char*, const char*, const char*, size_t, parse_result>
     get_config_pair(const char* buffer, size_t len, size_t offset);
 
     join_result join(span<char> target, span<const char> src, int& src_offset,
                      span<const char> terminator);
-    join_result look(span<char> t_check, span<const char> _src, size_t max_size, int& tgt_offset,
-                     span<const char> terminator);
+    loop_result look(span<char> t_check, span<const char> _src, size_t max_size, int& tgt_offset,
+                     span<const char> terminator, span<const char> escape);
+
+    std::string get_unique_filename(const char* prefix);
 }

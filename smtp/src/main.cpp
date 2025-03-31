@@ -10,6 +10,7 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 
+#include <cstdlib>
 #include <format>
 #include <unistd.h>
 
@@ -59,7 +60,7 @@ namespace ervan::smtp {
             }
 
             log::out << "New connection.";
-            dispatcher.spawn(handle, client_try.returned_handle);
+            dispatcher.spawn(handle, client_try.returned_handle, dispatcher);
         }
     }
 
@@ -103,6 +104,8 @@ namespace ervan::smtp {
     }
 
     eaio::coro<int> main_async() {
+        srand(time(nullptr));
+
         eipc::endpoint ep("smtp->monitor");
 
         mkdir("./ingoing/", 0700);

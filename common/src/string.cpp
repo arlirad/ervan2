@@ -1,7 +1,9 @@
 #include "ervan/string.hpp"
 
 #include <cctype>
+#include <cstdlib>
 #include <cstring>
+#include <format>
 
 namespace ervan {
     std::tuple<const char*, const char*, const char*, const char*, size_t, parse_result>
@@ -80,13 +82,19 @@ namespace ervan {
         return {{}, {_src.end(), _src.end()}};
     }
 
-    join_result look(span<char> t_check, span<const char> _src, size_t max_size, int& tgt_offset,
-                     span<const char> terminator) {
+    loop_result look(span<char> t_check, span<const char> _src, size_t max_size, int& tgt_offset,
+                     span<const char> terminator, span<const char> escape) {
         if (_src.size() == 0)
             return {};
 
         for (int i = 0; i < _src.size(); i++) {
             push_back(t_check, _src[i]);
+
+            if (memcmp(t_check.end() - escape.size(), escape.begin(), escape.size()) == 0) {
+                tgt_offset += i + 1;
+
+                return {{_src.begin(), _src.begin() + i}, {_src.begin() + i + 1, _src.end()}, true};
+            }
 
             if (memcmp(t_check.begin(), terminator.begin(), t_check.size()) == 0) {
                 size_t target_len = (tgt_offset + i) - t_check.size() + 1;
@@ -102,5 +110,9 @@ namespace ervan {
         tgt_offset += _src.size();
 
         return {{}, {_src.end(), _src.end()}};
+    }
+
+    std::string get_unique_filename(const char* prefix) {
+        return std::format("{}.{}.{}.{}", prefix, getpid(), std::time(nullptr), std::rand());
     }
 }

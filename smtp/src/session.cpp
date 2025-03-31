@@ -3,16 +3,19 @@
 #include "ervan/config.hpp"
 #include "ervan/log.hpp"
 #include "ervan/smtp.hpp"
+#include <sys/stat.h>
 
 #include <eaio.hpp>
+#include <fcntl.h>
 
 namespace ervan::smtp {
-    session::session(eaio::socket& sock) : _sock(sock) {
+    session::session(eaio::socket& sock, eaio::dispatcher& d) : _sock(sock), _d(d) {
         this->reset();
     }
 
     void session::reset() {
-        this->_state = STATE_CMD;
+        this->_state           = STATE_CMD;
+        this->_max_data_length = cfg.get<config_maxmessagesize>();
     }
 
     eaio::coro<void> session::call_command(span<char> sp) {
@@ -49,7 +52,7 @@ namespace ervan::smtp {
         co_await send_greeter(this->_sock);
 
         while (this->_state != STATE_CLOSED) {
-            char buffer[4096];
+            char buffer[8192];
             auto result = co_await this->_sock.recv(buffer, sizeof(buffer));
 
             if (!result) {
@@ -84,6 +87,34 @@ namespace ervan::smtp {
         return true;
     }
 
+    bool session::open_files() {
+        std::string data_path     = (this->_message_path + ".mbox").c_str();
+        std::string metadata_path = (this->_message_path + ".ervan").c_str();
+
+        int fd_data = open(data_path.c_str(), O_CREAT | O_WRONLY);
+        if (fd_data == -1)
+            return false;
+
+        fchmod(fd_data, S_IRUSR | S_IWUSR | S_IRGRP);
+
+        int fd_metadata = open(metadata_path.c_str(), O_CREAT | O_WRONLY);
+        if (fd_metadata == -1) {
+            if (fd_data != -1) {
+                unlink(metadata_path.c_str());
+                close(fd_data);
+            }
+
+            return false;
+        }
+
+        fchmod(fd_metadata, S_IRUSR | S_IWUSR | S_IRGRP);
+
+        this->_message_file  = this->_d.wrap<eaio::file>(fd_data);
+        this->_metadata_file = this->_d.wrap<eaio::file>(fd_metadata);
+
+        return true;
+    }
+
     eaio::coro<void> session::feed(span<const char> sp) {
         if (this->_state == STATE_CLOSED)
             co_return;
@@ -107,12 +138,30 @@ namespace ervan::smtp {
     }
 
     eaio::coro<void> session::feed_data(span<const char> sp) {
-        auto result =
-            look(this->_data_term_span, sp, 34524, this->_data_length, this->data_terminator);
+        size_t remaining_space = get_remaining_msg_space();
+        auto   result = look(this->_data_term_span, sp, this->_max_data_length, this->_data_length,
+                             data_terminator, terminator_escape);
 
-        if (result.sp.begin()) {
-            this->_state = STATE_CMD;
-            co_await this->reply(ok);
+        if (result.ec == std::errc::result_out_of_range)
+            co_await this->abort_data();
+
+        if (result.sp.begin() && !result.escape) {
+            span remaining = span<const char>(sp.begin(), result.rest.begin());
+
+            if (remaining_space + 5 < remaining.size()) {
+                co_await this->abort_data();
+            }
+            else {
+                co_await this->_message_file.write(remaining.begin(), remaining.size());
+                co_await this->finish_data();
+            }
+        }
+        else if (result.escape && remaining_space > 0) {
+            co_await this->_message_file.write(result.sp.begin(),
+                                               std::min(result.sp.size(), remaining_space));
+        }
+        else if (remaining_space > 0) {
+            co_await this->_message_file.write(sp.begin(), std::min(sp.size(), remaining_space));
         }
 
         if (result.rest.size() > 0)
@@ -133,7 +182,6 @@ namespace ervan::smtp {
             co_return;
         }
 
-        log::out << sp.begin();
         co_await this->reply(ok);
     }
 
@@ -143,11 +191,17 @@ namespace ervan::smtp {
             co_return;
         }
 
-        log::out << sp.begin();
         co_await this->reply(ok);
     }
 
     eaio::coro<void> session::data(span<char> sp) {
+        this->_message_path = "./ingoing/" + get_unique_filename("msg");
+
+        if (!this->open_files()) {
+            co_await this->reply(local_error);
+            co_return;
+        }
+
         this->_state = STATE_DATA;
         co_await this->reply(start_data);
     }
@@ -166,8 +220,37 @@ namespace ervan::smtp {
         co_await this->_sock.send(str, len);
     }
 
-    eaio::coro<void> handle(eaio::socket sock) {
-        session session(sock);
+    eaio::coro<void> session::finish_data() {
+        this->_message_file.truncate(this->_message_file.size() - 5);
+        this->_message_file.close();
+        this->_message_file = {};
+        this->_message_path = {};
+
+        this->_state = STATE_CMD;
+        co_await this->reply(ok);
+    }
+
+    eaio::coro<void> session::abort_data() {
+        ::unlink(this->_message_path.c_str());
+
+        this->_message_file.truncate(0);
+        this->_message_file.close();
+        this->_message_file = {};
+        this->_message_path = {};
+
+        this->_state = STATE_CMD;
+        co_await this->reply(exceeded_storage);
+    }
+
+    size_t session::get_remaining_msg_space() {
+        if (this->_data_length > this->_max_data_length)
+            return 0;
+
+        return this->_max_data_length - this->_data_length;
+    }
+
+    eaio::coro<void> handle(eaio::socket sock, eaio::dispatcher& d) {
+        session session(sock, d);
         co_await session.handle();
     }
 }

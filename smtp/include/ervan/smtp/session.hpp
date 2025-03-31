@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ervan/smtp.hpp"
+#include "ervan/smtp/types.hpp"
 #include "ervan/string.hpp"
 
 #include <algorithm>
@@ -13,33 +15,6 @@
 namespace ervan::smtp {
     class session;
 
-    template <size_t N>
-    struct smtp_t_str {
-        char str[N]{};
-
-        constexpr smtp_t_str(const char (&str)[N]) {
-            std::copy_n(str, N, this->str);
-        }
-    };
-
-    template <size_t N>
-    struct smtp_msg_str {
-        char str[N + 6]{};
-
-        constexpr smtp_msg_str(int code, const char (&str)[N]) {
-            this->str[0] = '0' + ((code / 100) % 10);
-            this->str[1] = '0' + ((code / 10) % 10);
-            this->str[2] = '0' + ((code / 1) % 10);
-            this->str[3] = ' ';
-
-            std::copy_n(str, N, this->str + 4);
-
-            this->str[N + 3] = '\r';
-            this->str[N + 4] = '\n';
-            this->str[N + 5] = '\0';
-        }
-    };
-
     using session_method = eaio::coro<void> (session::*)(span<char>);
 
     template <smtp_t_str N, session_method F>
@@ -48,19 +23,9 @@ namespace ervan::smtp {
         static constexpr eaio::coro<void> (session::*func)(span<char>) = F;
     };
 
-    template <int code, smtp_t_str M>
-    struct smtp_reply {
-        static constexpr smtp_msg_str msg = smtp_msg_str(code, M.str);
-    };
-
-    const smtp_reply<250, "OK">                                       ok;
-    const smtp_reply<354, "Start mail input; end with <CRLF>.<CRLF>"> start_data;
-    const smtp_reply<500, "Syntax error, command unrecognized">       invalid_command;
-    const smtp_reply<501, "Syntax error in parameters or arguments">  invalid_parameters;
-
     class session {
         public:
-        session(eaio::socket& sock);
+        session(eaio::socket& sock, eaio::dispatcher& d);
 
         eaio::coro<void> handle();
 
@@ -71,19 +36,23 @@ namespace ervan::smtp {
             STATE_CLOSED,
         };
 
-        span<const char> cmd_terminator  = span("\r\n", 2);
-        span<const char> data_terminator = span("\r\n.\r\n", 5);
-        eaio::socket&    _sock;
-        state            _state;
-        char             _cmd_buffer[512];
-        int              _cmd_offset = 0;
-        char             _data_term_buffer[5];
-        int              _data_length = 0;
+        eaio::dispatcher& _d;
+        eaio::socket&     _sock;
+        std::string       _message_path;
+        eaio::file        _message_file;
+        eaio::file        _metadata_file;
+        state             _state;
+        char              _cmd_buffer[512];
+        int               _cmd_offset = 0;
+        char              _data_term_buffer[5];
+        int               _data_length = 0;
+        size_t            _max_data_length;
         span<char> _cmd_span = span(_cmd_buffer, sizeof(_cmd_buffer) - sizeof(cmd_terminator));
         span<char> _data_term_span = span(_data_term_buffer, sizeof(_data_term_buffer));
 
         void reset();
         bool accept(span<char>& sp, const char* str);
+        bool open_files();
 
         eaio::coro<void> feed(span<const char> sp);
         eaio::coro<void> feed_cmd(span<const char> sp);
@@ -98,10 +67,15 @@ namespace ervan::smtp {
 
         eaio::coro<void> reply(const char* str, size_t len);
 
+        eaio::coro<void> finish_data();
+        eaio::coro<void> abort_data();
+
         template <typename T>
         eaio::coro<void> reply(T m) {
             co_await this->reply(m.msg.str, sizeof(m.msg));
         }
+
+        size_t get_remaining_msg_space();
 
         using cmds =
             std::tuple<smtp_command<"EHLO", &session::ehlo>, smtp_command<"MAIL", &session::mail>,
@@ -125,5 +99,5 @@ namespace ervan::smtp {
         }
     };
 
-    eaio::coro<void> handle(eaio::socket sock);
+    eaio::coro<void> handle(eaio::socket sock, eaio::dispatcher& d);
 };
