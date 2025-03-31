@@ -25,7 +25,12 @@ namespace ervan::smtp {
             auto request = request_try.value();
 
             if (request.function() == FUNC_WRITECONFIGKEY) {
-                //
+                auto update = request.get<config_update>();
+
+                cfg.set(update.key, update.data, sizeof(update.data));
+
+                eipc::response ack;
+                ep.respond(request, ack);
             }
         }
     }
@@ -37,8 +42,8 @@ namespace ervan::smtp {
         co_await sock.send(greeter.c_str(), greeter.size());
 
         for (;;) {
-            char buffer[32] = {};
-            auto result     = co_await sock.recv(buffer, sizeof(buffer));
+            char buffer[4096] = {};
+            auto result       = co_await sock.recv(buffer, sizeof(buffer));
 
             if (!result) {
                 log::out << result.perror("recv");
@@ -79,11 +84,21 @@ namespace ervan::smtp {
 
         co_await ep.request_async(FUNC_READCONFIG, cfg.key_list);
 
+        if (!cfg.ensure<config_port>()) {
+            log::out << "Port is not set!";
+            co_return;
+        }
+
+        if (!cfg.ensure<config_submissionport>()) {
+            log::out << "Submission port is not set!";
+            co_return;
+        }
+
         sockaddr_in addr = {};
 
         addr.sin_family      = AF_INET;
         addr.sin_addr.s_addr = htonl(INADDR_ANY);
-        addr.sin_port        = htons(2525);
+        addr.sin_port        = htons(cfg.get<config_port>());
 
         int  sock_fd = socket(AF_INET, SOCK_STREAM, 0);
         auto sock    = dispatcher.wrap<eaio::socket>(sock_fd);

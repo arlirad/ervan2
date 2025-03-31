@@ -1,1 +1,1 @@
-add_library(common ipc.cpp log.cpp)
+add_library(common ipc.cpp log.cpp string.cpp)
