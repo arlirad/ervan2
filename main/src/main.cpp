@@ -75,7 +75,7 @@ namespace ervan::main {
 
         for (;;) {
             auto [key_start, key_end, value_start, value_end, new_offset, result] =
-                get_config_entry(buffer, file_size, offset);
+                get_config_pair(buffer, file_size, offset);
             if (result == PARSE_INVALID) {
                 log::out << "Invalid config file.";
                 break;
@@ -88,6 +88,11 @@ namespace ervan::main {
 
             std::string key(key_start, key_end);
             std::string value(value_start, value_end);
+
+            if (!cfg.exists(key)) {
+                log::out << log::format("Unknown config parameter '{}'.", key);
+                continue;
+            }
 
             if (!cfg.set(key, value)) {
                 log::out << log::format("Invalid config parameter for '{}'.", key);
@@ -111,6 +116,7 @@ namespace ervan::main {
 
         sigemptyset(&mask);
         sigaddset(&mask, SIGCHLD);
+        sigaddset(&mask, SIGPIPE);
         sigprocmask(SIG_BLOCK, &mask, nullptr);
 
         ep.init("smtp->monitor");

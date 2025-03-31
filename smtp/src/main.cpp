@@ -4,6 +4,7 @@
 #include "ervan/ipc.hpp"
 #include "ervan/log.hpp"
 #include "ervan/smtp.hpp"
+#include "ervan/smtp/session.hpp"
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -35,37 +36,20 @@ namespace ervan::smtp {
         }
     }
 
-    eaio::coro<void> handle(eaio::socket sock) {
-        auto hostname = cfg.get<config_hostname>();
-        auto greeter  = std::format("220 {} SMTP Ervan 2 ready\r\n", hostname);
-
-        co_await sock.send(greeter.c_str(), greeter.size());
-
-        for (;;) {
-            char buffer[4096] = {};
-            auto result       = co_await sock.recv(buffer, sizeof(buffer));
-
-            if (!result) {
-                log::out << result.perror("recv");
-                break;
-            }
-
-            if (result.len == 0) {
-                log::out << "done";
-                break;
-            }
-
-            log::out << buffer;
-        }
-    }
-
     eaio::coro<void> listen(eaio::socket sock) {
         if (!cfg.ensure<config_hostname>()) {
             log::out << "Hostname is not set!";
             co_return;
         }
 
+        if (!cfg.ensure<config_maxmessagesize>()) {
+            log::out << "Max message size is not set!";
+            co_return;
+        }
+
         log::out << log::format("Listening as '{}'.", cfg.get<config_hostname>());
+        log::out << log::format("Max message size: {} KiB.",
+                                cfg.get<config_maxmessagesize>() / 1024);
 
         for (;;) {
             auto client_try = co_await sock.accept();

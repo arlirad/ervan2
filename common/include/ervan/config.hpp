@@ -6,6 +6,8 @@
 #include <charconv>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <tuple>
@@ -46,8 +48,10 @@ namespace ervan {
     struct config_port : config_entry<1, uint16_t, "port"> {};
     struct config_submissionport : config_entry<2, uint16_t, "submissionport"> {};
     struct config_debug : config_entry<3, bool, "debug"> {};
+    struct config_maxmessagesize : config_entry<4, size_t, "maxmessagesize"> {};
 
-    using config_all = config<config_hostname, config_port, config_submissionport, config_debug>;
+    using config_all = config<config_hostname, config_port, config_submissionport, config_debug,
+                              config_maxmessagesize>;
 
     template <typename... Args>
     struct config_key_list {
@@ -123,6 +127,10 @@ namespace ervan {
             return this->set_by_id<void, Keys...>(id, buffer, len);
         }
 
+        constexpr bool exists(std::string& key) {
+            return exists_step<void, Keys...>(key);
+        }
+
         template <typename K>
         bool ensure() {
             const int index = this->find_index<K::id, Keys...>();
@@ -157,6 +165,16 @@ namespace ervan {
         constexpr bool set_by_key(std::string& key, std::string& val) {
             return this->compare<T>(key) ? this->transform_set<T>(val)
                                          : this->set_by_key<void, Args...>(key, val);
+        }
+
+        template <typename>
+        constexpr bool exists_step(std::string&) {
+            return false;
+        }
+
+        template <typename, typename T, typename... Args>
+        constexpr bool exists_step(std::string& key) {
+            return this->compare<T>(key) ? true : this->exists_step<void, Args...>(key);
         }
 
         template <typename>
@@ -221,7 +239,6 @@ namespace ervan {
             auto value = transform_try.value();
 
             std::get<index>(_entries).value = std::make_shared<typename K::type>(value);
-
             return true;
         }
 
@@ -230,12 +247,12 @@ namespace ervan {
             return str;
         }
 
-        constexpr std::optional<uint16_t> transform(std::shared_ptr<uint16_t>&, std::string& str) {
-            uint32_t value;
-            auto     result = std::from_chars(str.c_str(), str.c_str() + str.size(), value);
+        template <typename T>
+        constexpr std::optional<T> transform(std::shared_ptr<T>&, std::string& str) {
+            size_t value;
+            auto   result = std::from_chars(str.c_str(), str.c_str() + str.size(), value);
 
-            if (result.ec == std::errc::invalid_argument ||
-                value > std::numeric_limits<uint16_t>::max())
+            if (result.ec == std::errc::invalid_argument || value > std::numeric_limits<T>::max())
                 return {};
 
             return value;
