@@ -47,6 +47,9 @@ namespace ervan {
 
     join_result join(span<char> _target, span<const char> _src, int& tgt_offset,
                      span<const char> terminator) {
+        if (_src.size() == 0)
+            return {};
+
         auto target  = span(_target.begin(), _target.len - terminator.len);
         auto src     = span(_src.begin(), std::min(target.len, _src.len));
         auto t_check = span(target.end(), _target.end());

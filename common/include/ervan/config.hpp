@@ -286,7 +286,7 @@ namespace ervan {
 
         template <typename K>
         constexpr bool compare(const std::string& compared_to) {
-            return strcmp(K::name.name, compared_to.c_str()) == 0;
+            return std::strcmp(K::name.name, compared_to.c_str()) == 0;
         }
     };
 }
