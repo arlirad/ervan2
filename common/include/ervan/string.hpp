@@ -79,4 +79,6 @@ namespace ervan {
 
     join_result join(span<char> target, span<const char> src, int& src_offset,
                      span<const char> terminator);
+    join_result look(span<char> t_check, span<const char> _src, size_t max_size, int& tgt_offset,
+                     span<const char> terminator);
 }

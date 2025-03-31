@@ -79,4 +79,28 @@ namespace ervan {
 
         return {{}, {_src.end(), _src.end()}};
     }
+
+    join_result look(span<char> t_check, span<const char> _src, size_t max_size, int& tgt_offset,
+                     span<const char> terminator) {
+        if (_src.size() == 0)
+            return {};
+
+        for (int i = 0; i < _src.size(); i++) {
+            push_back(t_check, _src[i]);
+
+            if (memcmp(t_check.begin(), terminator.begin(), t_check.size()) == 0) {
+                size_t target_len = (tgt_offset + i) - t_check.size() + 1;
+                tgt_offset        = 0;
+
+                if (target_len > max_size)
+                    return {std::errc::result_out_of_range, {_src.begin() + i + 1, _src.end()}};
+
+                return {{t_check.begin(), target_len}, {_src.begin() + i + 1, _src.end()}};
+            }
+        }
+
+        tgt_offset += _src.size();
+
+        return {{}, {_src.end(), _src.end()}};
+    }
 }
