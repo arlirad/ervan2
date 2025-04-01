@@ -115,6 +115,8 @@ namespace ervan {
     }
 
     std::string get_unique_filename(const char* prefix) {
-        return std::format("{}.{}.{}.{}", prefix, getpid(), std::time(nullptr), std::rand());
+        static int counter = 0;
+        return std::format("{}.{}.{}.{}.{}", prefix, getpid(), std::time(nullptr), counter++,
+                           std::rand());
     }
 }

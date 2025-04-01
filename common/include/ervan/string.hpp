@@ -34,19 +34,19 @@ namespace ervan {
             this->len   = _end - _start;
         }
 
-        T* begin() {
+        constexpr T* begin() const {
             return this->start;
         }
 
-        T* end() {
+        constexpr T* end() const {
             return this->start + this->len;
         }
 
-        size_t size() {
+        constexpr size_t size() const {
             return this->len;
         }
 
-        T& operator[](int index) {
+        constexpr T& operator[](int index) const {
             return this->start[index];
         }
     };
@@ -117,7 +117,7 @@ namespace ervan {
             this->line_length  = 0;
         }
 
-        size_t remaining_space() {
+        size_t remaining_space() const {
             if (this->total_length > this->max_size)
                 return 0;
 

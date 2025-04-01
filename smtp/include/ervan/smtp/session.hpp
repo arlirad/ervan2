@@ -36,17 +36,26 @@ namespace ervan::smtp {
             STATE_CLOSED,
         };
 
-        loop_state        _loop_state;
-        char              _loop_buffer[5];
         eaio::dispatcher& _d;
         eaio::socket&     _sock;
-        std::string       _message_path;
-        eaio::file        _message_file;
-        eaio::file        _metadata_file;
         state             _state;
-        char              _cmd_buffer[512];
-        int               _cmd_offset = 0;
-        span<char> _cmd_span = span(_cmd_buffer, sizeof(_cmd_buffer) - sizeof(cmd_terminator));
+
+        size_t      _max_data_size;
+        size_t      _data_size;
+        std::string _data_path;
+        std::string _metadata_path;
+        eaio::file  _data_file;
+        eaio::file  _metadata_file;
+
+        char       _cmd_buffer[512];
+        int        _cmd_offset = 0;
+        char       _line_buffer[1024];
+        int        _line_offset = 0;
+        span<char> _cmd_span    = span(_cmd_buffer, sizeof(_cmd_buffer) - cmd_terminator.size());
+        span<char> _line_span   = span(_line_buffer, sizeof(_line_buffer) - cmd_terminator.size());
+
+        bool _data_too_long;
+        bool _line_too_long;
 
         void reset();
         bool accept(span<char>& sp, const char* str);
