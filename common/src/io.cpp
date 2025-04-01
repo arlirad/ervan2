@@ -25,7 +25,7 @@ namespace ervan::io {
         aiocb.aio_sigevent.sigev_signo           = SIGIO;
         aiocb.aio_sigevent.sigev_notify          = SIGEV_SIGNAL;
 
-        int result = ::aio_fsync(O_DSYNC, &aiocb);
+        int result = ::aio_fsync(O_SYNC, &aiocb);
         if (result != 0)
             co_return result;
 
