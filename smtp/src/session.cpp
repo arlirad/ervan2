@@ -1,6 +1,7 @@
 #include "ervan/smtp/session.hpp"
 
 #include "ervan/config.hpp"
+#include "ervan/io.hpp"
 #include "ervan/log.hpp"
 #include "ervan/smtp.hpp"
 #include <sys/stat.h>
@@ -255,9 +256,18 @@ namespace ervan::smtp {
     }
 
     eaio::coro<void> session::finish_data() {
+        auto data_sync     = io::sync_file(this->_data_file);
+        auto metadata_sync = io::sync_file(this->_metadata_file);
+
+        co_await data_sync;
+        co_await metadata_sync;
+
         this->_data_file.close();
         this->_data_file = {};
         this->_data_path = {};
+        this->_metadata_file.close();
+        this->_metadata_file = {};
+        this->_metadata_path = {};
 
         this->_state = STATE_CMD;
         co_await this->reply(ok);

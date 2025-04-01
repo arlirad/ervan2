@@ -1,6 +1,7 @@
 #include "eaio.hpp"
 #include "eipc.hpp"
 #include "ervan/config.hpp"
+#include "ervan/io.hpp"
 #include "ervan/ipc.hpp"
 #include "ervan/log.hpp"
 #include "ervan/smtp.hpp"
@@ -105,6 +106,7 @@ namespace ervan::smtp {
 
     eaio::coro<int> main_async() {
         srand(time(nullptr));
+        io::install_io_signal();
 
         eipc::endpoint ep("smtp->monitor");
 
