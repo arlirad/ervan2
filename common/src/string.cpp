@@ -82,32 +82,34 @@ namespace ervan {
         return {{}, {_src.end(), _src.end()}};
     }
 
-    loop_result look(span<char> t_check, span<const char> _src, size_t max_size, int& tgt_offset,
-                     span<const char> terminator, span<const char> escape) {
+    // TODO: this needs to be rewritten to be more generic
+    loop_result look(loop_state& state, span<const char> _src) {
         if (_src.size() == 0)
             return {};
 
         for (int i = 0; i < _src.size(); i++) {
-            push_back(t_check, _src[i]);
+            push_back(state.t_check, _src[i]);
 
-            if (memcmp(t_check.end() - escape.size(), escape.begin(), escape.size()) == 0) {
-                tgt_offset += i + 1;
+            if (memcmp(state.t_check.end() - state.escape.size(), state.escape.begin(),
+                       state.escape.size()) == 0) {
+                state.total_length += i + 1;
 
                 return {{_src.begin(), _src.begin() + i}, {_src.begin() + i + 1, _src.end()}, true};
             }
 
-            if (memcmp(t_check.begin(), terminator.begin(), t_check.size()) == 0) {
-                size_t target_len = (tgt_offset + i) - t_check.size() + 1;
-                tgt_offset        = 0;
+            if (memcmp(state.t_check.begin(), state.terminator.begin(), state.t_check.size()) ==
+                0) {
+                size_t target_len  = (state.total_length + i) - state.t_check.size() + 1;
+                state.total_length = 0;
 
-                if (target_len > max_size)
+                if (target_len > state.max_size)
                     return {std::errc::result_out_of_range, {_src.begin() + i + 1, _src.end()}};
 
-                return {{t_check.begin(), target_len}, {_src.begin() + i + 1, _src.end()}};
+                return {{state.t_check.begin(), target_len}, {_src.begin() + i + 1, _src.end()}};
             }
         }
 
-        tgt_offset += _src.size();
+        state.total_length += _src.size();
 
         return {{}, {_src.end(), _src.end()}};
     }

@@ -237,40 +237,49 @@ TEST(BufferTests, BufferJoinLongTerminatorTest) {
 
 TEST(BufferTests, BufferLookEscapeTest) {
     char buffer[5];
-    int  offset = 0;
 
-    auto part = "aaa\r\n..\r\nbbbb\r\n.\r\n";
+    auto part  = "aaa\r\n..\r\nbbbb\r\n.\r\n";
+    auto state = ervan::loop_state{
+        .t_check         = ervan::span(buffer, sizeof(buffer)),
+        .max_size        = 32,
+        .max_line_length = 100,
+        .terminator      = term_l_sp,
+        .escape          = escape_sp,
+    };
 
-    auto result = look(ervan::span(buffer, sizeof(buffer)), ervan::span(part, 18), 32, offset,
-                       term_sp, escape_sp);
+    auto result = look(state, ervan::span(part, 18));
 
     ASSERT_TRUE(result.escape);
     ASSERT_EQ(result.sp.begin(), part);
     ASSERT_EQ(result.sp.size(), 6);
     ASSERT_EQ(result.rest.begin(), part + 7);
     ASSERT_EQ(result.rest.size(), 11);
-    ASSERT_EQ(offset, 7);
+    ASSERT_EQ(state.total_length, 7);
 }
 
 TEST(BufferTests, BufferLookBrokenEscapeTest) {
     char buffer[5];
-    int  offset = 0;
 
-    auto part = "aaa\r\n.";
+    auto part  = "aaa\r\n.";
+    auto state = ervan::loop_state{
+        .t_check         = ervan::span(buffer, sizeof(buffer)),
+        .max_size        = 32,
+        .max_line_length = 100,
+        .terminator      = term_l_sp,
+        .escape          = escape_sp,
+    };
 
-    auto result = look(ervan::span(buffer, sizeof(buffer)), ervan::span(part, 6), 32, offset,
-                       term_sp, escape_sp);
+    auto result = look(state, ervan::span(part, 6));
 
     ASSERT_FALSE(result.escape);
     ASSERT_EQ(result.sp.begin(), nullptr);
     ASSERT_EQ(result.sp.size(), 0);
     ASSERT_EQ(result.rest.begin(), part + 6);
     ASSERT_EQ(result.rest.size(), 0);
-    ASSERT_EQ(offset, 6);
+    ASSERT_EQ(state.total_length, 6);
 
     auto part2   = ".\r\nbbbb\r\n.\r\n";
-    auto result2 = look(ervan::span(buffer, sizeof(buffer)), ervan::span(part2, 12), 32, offset,
-                        term_sp, escape_sp);
+    auto result2 = look(state, ervan::span(part2, 12));
 
     ASSERT_EQ(result2.sp.begin(), part2);
     ASSERT_EQ(result2.sp.size(), 0);

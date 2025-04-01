@@ -36,6 +36,8 @@ namespace ervan::smtp {
             STATE_CLOSED,
         };
 
+        loop_state        _loop_state;
+        char              _loop_buffer[5];
         eaio::dispatcher& _d;
         eaio::socket&     _sock;
         std::string       _message_path;
@@ -44,11 +46,7 @@ namespace ervan::smtp {
         state             _state;
         char              _cmd_buffer[512];
         int               _cmd_offset = 0;
-        char              _data_term_buffer[5];
-        int               _data_length = 0;
-        size_t            _max_data_length;
         span<char> _cmd_span = span(_cmd_buffer, sizeof(_cmd_buffer) - sizeof(cmd_terminator));
-        span<char> _data_term_span = span(_data_term_buffer, sizeof(_data_term_buffer));
 
         void reset();
         bool accept(span<char>& sp, const char* str);
@@ -74,8 +72,6 @@ namespace ervan::smtp {
         eaio::coro<void> reply(T m) {
             co_await this->reply(m.msg.str, sizeof(m.msg));
         }
-
-        size_t get_remaining_msg_space();
 
         using cmds =
             std::tuple<smtp_command<"EHLO", &session::ehlo>, smtp_command<"MAIL", &session::mail>,

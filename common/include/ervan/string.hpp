@@ -103,13 +103,34 @@ namespace ervan {
         }
     };
 
+    struct loop_state {
+        span<char>       t_check;
+        size_t           max_size;
+        int              total_length;
+        size_t           max_line_length;
+        int              line_length;
+        span<const char> terminator;
+        span<const char> escape;
+
+        void reset() {
+            this->total_length = 0;
+            this->line_length  = 0;
+        }
+
+        size_t remaining_space() {
+            if (this->total_length > this->max_size)
+                return 0;
+
+            return this->max_size - this->total_length;
+        }
+    };
+
     std::tuple<const char*, const char*, const char*, const char*, size_t, parse_result>
     get_config_pair(const char* buffer, size_t len, size_t offset);
 
     join_result join(span<char> target, span<const char> src, int& src_offset,
                      span<const char> terminator);
-    loop_result look(span<char> t_check, span<const char> _src, size_t max_size, int& tgt_offset,
-                     span<const char> terminator, span<const char> escape);
+    loop_result look(loop_state& state, span<const char> _src);
 
     std::string get_unique_filename(const char* prefix);
 }

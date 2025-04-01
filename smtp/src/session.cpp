@@ -9,13 +9,19 @@
 #include <fcntl.h>
 
 namespace ervan::smtp {
-    session::session(eaio::socket& sock, eaio::dispatcher& d) : _sock(sock), _d(d) {
+    session::session(eaio::socket& sock, eaio::dispatcher& d)
+        : _sock(sock), _d(d), _loop_state({
+                                  .t_check = span(this->_loop_buffer, sizeof(this->_loop_buffer)),
+                                  .max_line_length = 1000,
+                                  .terminator      = cmd_terminator,
+                                  .escape          = terminator_escape,
+                              }) {
         this->reset();
     }
 
     void session::reset() {
-        this->_state           = STATE_CMD;
-        this->_max_data_length = cfg.get<config_maxmessagesize>();
+        this->_state               = STATE_CMD;
+        this->_loop_state.max_size = cfg.get<config_maxmessagesize>();
     }
 
     eaio::coro<void> session::call_command(span<char> sp) {
@@ -138,9 +144,8 @@ namespace ervan::smtp {
     }
 
     eaio::coro<void> session::feed_data(span<const char> sp) {
-        size_t remaining_space = get_remaining_msg_space();
-        auto   result = look(this->_data_term_span, sp, this->_max_data_length, this->_data_length,
-                             data_terminator, terminator_escape);
+        size_t remaining_space = this->_loop_state.remaining_space();
+        auto   result          = look(this->_loop_state, sp);
 
         if (result.ec == std::errc::result_out_of_range)
             co_await this->abort_data();
@@ -148,7 +153,7 @@ namespace ervan::smtp {
         if (result.sp.begin() && !result.escape) {
             span remaining = span<const char>(sp.begin(), result.rest.begin());
 
-            if (remaining_space + 5 < remaining.size()) {
+            if (remaining_space + 3 < remaining.size()) {
                 co_await this->abort_data();
             }
             else {
@@ -170,10 +175,16 @@ namespace ervan::smtp {
 
     eaio::coro<void> session::ehlo(span<char> sp) {
         auto hostname = cfg.get<config_hostname>();
+        // auto size     = cfg.get<config_maxmessagesize>();
+        // auto size_str = std::format("{}", size);
 
-        co_await this->_sock.send("250 ", 4);
+        co_await this->_sock.send("250-", 4);
         co_await this->_sock.send(hostname.c_str(), hostname.size());
         co_await this->_sock.send(" at your service\r\n", 18);
+        co_await this->_sock.send("250 8BITMIME\r\n", 14);
+        /*co_await this->_sock.send("250 SIZE ", 9);
+        co_await this->_sock.send(size_str.c_str(), size_str.size());
+        co_await this->_sock.send("\r\n", 2);*/
     }
 
     eaio::coro<void> session::mail(span<char> sp) {
@@ -196,6 +207,7 @@ namespace ervan::smtp {
 
     eaio::coro<void> session::data(span<char> sp) {
         this->_message_path = "./ingoing/" + get_unique_filename("msg");
+        this->_loop_state.reset();
 
         if (!this->open_files()) {
             co_await this->reply(local_error);
@@ -221,7 +233,7 @@ namespace ervan::smtp {
     }
 
     eaio::coro<void> session::finish_data() {
-        this->_message_file.truncate(this->_message_file.size() - 5);
+        this->_message_file.truncate(this->_message_file.size() - 3);
         this->_message_file.close();
         this->_message_file = {};
         this->_message_path = {};
@@ -240,13 +252,6 @@ namespace ervan::smtp {
 
         this->_state = STATE_CMD;
         co_await this->reply(exceeded_storage);
-    }
-
-    size_t session::get_remaining_msg_space() {
-        if (this->_data_length > this->_max_data_length)
-            return 0;
-
-        return this->_max_data_length - this->_data_length;
     }
 
     eaio::coro<void> handle(eaio::socket sock, eaio::dispatcher& d) {
