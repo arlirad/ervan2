@@ -29,7 +29,5 @@ namespace ervan {
             co_await file.write(path.c_str(), path.size());
             co_await file.write("\r\n", 2);
         }
-
-        co_await io::sync_file(file);
     }
 }

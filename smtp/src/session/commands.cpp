@@ -103,7 +103,7 @@ namespace ervan::smtp {
     }
 
     eaio::coro<void> session::data(span<char> sp) {
-        if (!this->open_files()) {
+        if (!co_await this->open_files()) {
             co_await this->reply(local_error);
             co_return;
         }

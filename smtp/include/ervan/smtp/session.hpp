@@ -50,9 +50,7 @@ namespace ervan::smtp {
         size_t      _max_data_size;
         size_t      _data_size;
         std::string _data_path;
-        std::string _metadata_path;
         eaio::file  _data_file;
-        eaio::file  _metadata_file;
         size_t      _max_forward_paths;
 
         char       _cmd_buffer[512];
@@ -67,7 +65,6 @@ namespace ervan::smtp {
 
         void reset();
         bool accept(span<char>& sp, const char* str);
-        bool open_files();
 
         bool mail_param(parse::esmtp_param_result& param);
         bool rcpt_param(parse::esmtp_param_result& param);
@@ -86,6 +83,11 @@ namespace ervan::smtp {
         eaio::coro<void> send_greeter();
         eaio::coro<void> reply(const char* str, size_t len);
 
+        eaio::coro<bool> open_files();
+        eaio::coro<void> write_header_space();
+        eaio::coro<void> write_data_tar_header(size_t length);
+        eaio::coro<void> write_metadata_tar_header(size_t length);
+        eaio::coro<void> pad_data();
         eaio::coro<void> finish_data();
         eaio::coro<void> abort_data();
 
