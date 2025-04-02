@@ -80,5 +80,5 @@ TEST(ParseTests, ParseESMTPParamTest) {
     auto result = parse::esmtp_param(input_sp);
 
     ASSERT_EQ(result.key.body, span<const char>("BODY", 4));
-    ASSERT_EQ(result.value.body, span<const char>("8BITMIME", 4));
+    ASSERT_EQ(result.value.body, span<const char>("8BITMIME", 8));
 }
