@@ -5,22 +5,64 @@ namespace ervan::parse {
         return isalnum(c) || std::string("!#$%&'*+-/=?^_`{|}~").find(c) != std::string::npos;
     }
 
+    bool isqtextSMTP(int c) {
+        return (c >= 32 && c <= 33) || (c >= 35 && c <= 91) || (c >= 93 && c <= 126);
+    }
+
+    bool isestmpvalue(int c) {
+        return (c >= 33 && c <= 60) || (c >= 62 && c <= 126);
+    }
+
     result atom(span<const char> _src) {
         auto src = _src;
 
-        if (!isatext(src[0]))
+        if (src.size() == 0 || !isatext(src[0]))
             return malformed_result{};
 
         src = src.advance(1);
 
-        while (isatext(src[0]))
+        while (src.size() > 0 && isatext(src[0]))
             src = src.advance(1);
+
+        return {_src, src};
+    }
+
+    quoted_string_result quoted_string(span<const char> _src) {
+        auto src = _src;
+        if (src.size() == 0 || src[0] != '"')
+            return malformed_result{};
+
+        src = src.advance(1);
+
+        while (src.size() > 0 && src[0] != '"') {
+            if (src[0] == '\\') {
+                src = src.advance(1);
+
+                if (src[0] < 32 || src[0] > 126)
+                    return malformed_result{};
+            }
+            else {
+                if (!isqtextSMTP(src[0]))
+                    return malformed_result{};
+            }
+
+            src = src.advance(1);
+        }
+
+        if (src.size() == 0 || src[0] != '"')
+            return malformed_result{};
+
+        src = src.advance(1);
 
         return {_src, src};
     }
 
     local_part_result local_part(span<const char> _src) {
         auto src = _src;
+
+        auto quoted_string_result = quoted_string(src);
+        if (quoted_string_result)
+            return {quoted_string_result};
 
         for (;;) {
             auto result = atom(src);
@@ -29,7 +71,7 @@ namespace ervan::parse {
 
             src = result.rest;
 
-            if (src[0] != '.')
+            if (src.size() == 0 || src[0] != '.')
                 break;
 
             src = src.advance(1);
@@ -54,10 +96,10 @@ namespace ervan::parse {
                 required = false;
             }
 
-            if (src[size] == '-')
+            if (size < src.size() && src[size] == '-')
                 return malformed_result{};
 
-            if (src[size] != '.')
+            if (size == src.size() || src[size] != '.')
                 break;
 
             required = true;
@@ -68,7 +110,7 @@ namespace ervan::parse {
     }
 
     domain_result at_domain(span<const char> src) {
-        if (src[0] != '@')
+        if (src.size() == 0 || src[0] != '@')
             return malformed_result{};
 
         src = src.advance(1);
@@ -82,7 +124,7 @@ namespace ervan::parse {
         if (at_domain_result) {
             src = at_domain_result.rest;
 
-            while (src[0] == ',') {
+            while (src.size() > 0 && src[0] == ',') {
                 src = src.advance(1);
 
                 at_domain_result = at_domain(src);
@@ -92,7 +134,7 @@ namespace ervan::parse {
                 src = at_domain_result.rest;
             }
 
-            if (src[0] != ':')
+            if (src.size() == 0 || src[0] != ':')
                 return malformed_result{};
 
             src = src.advance(1);
@@ -113,7 +155,7 @@ namespace ervan::parse {
 
         src = local_part_result.rest;
 
-        if (src[0] != '@')
+        if (src.size() == 0 || src[0] != '@')
             return malformed_result{};
 
         src = src.advance(1);
@@ -128,7 +170,7 @@ namespace ervan::parse {
 
     part_result path(span<const char> _src) {
         auto src = _src;
-        if (src[0] != '<')
+        if (src.size() == 0 || src[0] != '<')
             return malformed_result{};
 
         src = src.advance(1);
@@ -139,7 +181,7 @@ namespace ervan::parse {
 
         src = result.rest;
 
-        if (src[0] != '>')
+        if (src.size() == 0 || src[0] != '>')
             return malformed_result{};
 
         src = src.advance(1);
@@ -149,10 +191,13 @@ namespace ervan::parse {
 
     part_result reverse_path(span<const char> _src) {
         auto src = _src;
-        if (src[0] != '<')
+        if (src.size() == 0 || src[0] != '<')
             return malformed_result{};
 
         src = src.advance(1);
+
+        if (src.size() == 0)
+            return malformed_result{};
 
         if (src[0] == '>') {
             src = src.advance(1);
@@ -165,11 +210,57 @@ namespace ervan::parse {
 
         src = result.rest;
 
-        if (src[0] != '>')
+        if (src.size() == 0 || src[0] != '>')
             return malformed_result{};
 
         src = src.advance(1);
 
         return {_src, src, result};
+    }
+
+    result esmtp_keyword(span<const char> src) {
+        if (src.size() == 0 || !isalnum(src[0]))
+            return malformed_result{};
+
+        size_t size = 1;
+
+        while (size < src.size() && (isalnum(src[size]) || src[size] == '-'))
+            size++;
+
+        return {src, src.advance(size)};
+    }
+
+    result esmtp_value(span<const char> src) {
+        if (src.size() == 0 || !isestmpvalue(src[0]))
+            return malformed_result{};
+
+        size_t size = 1;
+
+        while (size < src.size() && isestmpvalue(src[size]))
+            size++;
+
+        return {src, src.advance(size)};
+    }
+
+    esmtp_param_result esmtp_param(span<const char> _src) {
+        auto src = _src;
+        auto key = esmtp_keyword(src);
+        if (!key)
+            return malformed_result{};
+
+        src = key.rest;
+
+        if (src.size() == 0 || src[0] != '=')
+            return malformed_result{};
+
+        src = src.advance(1);
+
+        auto value = esmtp_value(src);
+        if (!value)
+            return malformed_result{};
+
+        src = value.rest;
+
+        return {_src, src, key, value};
     }
 }

@@ -50,3 +50,35 @@ TEST(ParseTests, ParseBufferSafetyTest) {
 
     ASSERT_FALSE(result);
 }
+
+TEST(ParseTests, ParseQuotedStringTest) {
+    const char* input    = "<\"asdf\\ bsdf\"@example.com>";
+    span        input_sp = span<const char>(input, 26);
+
+    auto result = parse::path(input_sp);
+
+    ASSERT_EQ(std::strcmp(result.mailbox.local_part.buffer, "asdf bsdf"), 0);
+    ASSERT_EQ(std::strcmp(result.mailbox.domain.buffer, "example.com"), 0);
+    ASSERT_EQ(result.rest.begin(), input + 26);
+    ASSERT_EQ(result.rest.size(), 0);
+
+    input    = "<\"\"@example.com>";
+    input_sp = span<const char>(input, 16);
+
+    result = parse::path(input_sp);
+
+    ASSERT_EQ(std::strcmp(result.mailbox.local_part.buffer, ""), 0);
+    ASSERT_EQ(std::strcmp(result.mailbox.domain.buffer, "example.com"), 0);
+    ASSERT_EQ(result.rest.begin(), input + 16);
+    ASSERT_EQ(result.rest.size(), 0);
+}
+
+TEST(ParseTests, ParseESMTPParamTest) {
+    const char* input    = "BODY=8BITMIME";
+    span        input_sp = span<const char>(input, 13);
+
+    auto result = parse::esmtp_param(input_sp);
+
+    ASSERT_EQ(result.key.body, span<const char>("BODY", 4));
+    ASSERT_EQ(result.value.body, span<const char>("8BITMIME", 4));
+}

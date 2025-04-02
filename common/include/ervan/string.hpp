@@ -2,6 +2,7 @@
 
 #include <system_error>
 
+#include <cstring>
 #include <optional>
 #include <string>
 #include <tuple>
@@ -54,6 +55,23 @@ namespace ervan {
 
         constexpr span advance(size_t n) const {
             return span(this->begin() + n, this->end());
+        }
+
+        bool compare_insensitive(const span& other) const {
+            if (this->size() != other.size())
+                return false;
+
+            for (size_t i = 0; i < this->size(); i++)
+                if (std::tolower(this->start[i]) != std::tolower(other.start[i]))
+                    return false;
+
+            return true;
+        }
+
+        bool operator==(const span& other) const {
+            return this->size() != other.size()
+                       ? false
+                       : std::memcmp(this->begin(), other.begin(), this->size()) == 0;
         }
     };
 

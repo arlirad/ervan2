@@ -2,6 +2,7 @@
 
 #include "ervan/string.hpp"
 
+#include <algorithm>
 #include <cstring>
 
 namespace ervan::parse {
@@ -58,6 +59,10 @@ namespace ervan::parse {
         using result::result;
     };
 
+    struct quoted_string_result : public result {
+        using result::result;
+    };
+
     struct atom_result : public result {
         parse::domain_buffer buffer;
 
@@ -76,6 +81,27 @@ namespace ervan::parse {
         local_part_result(span<const char> src, span<const char> rest)
             : result(src, src.advance(rest.begin() - src.begin()), rest.begin() - src.begin(),
                      this->buffer) {}
+
+        local_part_result(quoted_string_result quot) : result(quot.body, quot.rest) {
+            size_t      size = quot.body.size();
+            const char* str  = quot.body.begin();
+
+            if (size >= sizeof(buffer)) {
+                this->malformed = true;
+                return;
+            }
+
+            size_t j = 0;
+
+            for (size_t i = 1; i < size - 1; i++) {
+                if (str[i] == '\\')
+                    buffer[j++] = str[++i];
+                else
+                    buffer[j++] = str[i];
+            }
+
+            buffer[j] = '\0';
+        }
     };
 
     struct domain_result : public result {
@@ -114,12 +140,30 @@ namespace ervan::parse {
         }
     };
 
-    result            atom(span<const char> src);
-    local_part_result local_part(span<const char> src);
-    domain_result     domain(span<const char> src);
-    domain_result     at_domain(span<const char> src);
-    result            a_d_l(span<const char> src);
-    mailbox_result    mailbox(span<const char> src);
-    part_result       path(span<const char> src);
-    part_result       reverse_path(span<const char> src);
+    struct esmtp_param_result : public result {
+        using result::result;
+
+        result key;
+        result value;
+
+        esmtp_param_result(span<const char> _src, span<const char> _rest, result& _key,
+                           result& _value)
+            : result(_src, _rest) {
+            this->key   = _key;
+            this->value = _value;
+        }
+    };
+
+    result               atom(span<const char> src);
+    quoted_string_result quoted_string(span<const char> src);
+    local_part_result    local_part(span<const char> src);
+    domain_result        domain(span<const char> src);
+    domain_result        at_domain(span<const char> src);
+    result               a_d_l(span<const char> src);
+    mailbox_result       mailbox(span<const char> src);
+    part_result          path(span<const char> src);
+    part_result          reverse_path(span<const char> src);
+    result               esmtp_keyword(span<const char> src);
+    result               esmtp_value(span<const char> src);
+    esmtp_param_result   esmtp_param(span<const char> src);
 }

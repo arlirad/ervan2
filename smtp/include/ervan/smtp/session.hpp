@@ -13,6 +13,10 @@
 #include <string>
 #include <tuple>
 
+namespace ervan::parse {
+    struct esmtp_param_result;
+}
+
 namespace ervan::smtp {
     class session;
 
@@ -65,6 +69,9 @@ namespace ervan::smtp {
         bool accept(span<char>& sp, const char* str);
         bool open_files();
 
+        bool mail_param(parse::esmtp_param_result& param);
+        bool rcpt_param(parse::esmtp_param_result& param);
+
         eaio::coro<void> feed(span<const char> sp);
         eaio::coro<void> feed_cmd(span<const char> sp);
         eaio::coro<void> feed_data(span<const char> sp);
@@ -76,6 +83,7 @@ namespace ervan::smtp {
         eaio::coro<void> data(span<char> sp);
         eaio::coro<void> quit(span<char> sp);
 
+        eaio::coro<void> send_greeter();
         eaio::coro<void> reply(const char* str, size_t len);
 
         eaio::coro<void> finish_data();
