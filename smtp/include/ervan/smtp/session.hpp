@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ervan/message.hpp"
 #include "ervan/smtp.hpp"
 #include "ervan/smtp/types.hpp"
 #include "ervan/string.hpp"
@@ -40,12 +41,15 @@ namespace ervan::smtp {
         eaio::socket&     _sock;
         state             _state;
 
+        metadata _metadata;
+
         size_t      _max_data_size;
         size_t      _data_size;
         std::string _data_path;
         std::string _metadata_path;
         eaio::file  _data_file;
         eaio::file  _metadata_file;
+        size_t      _max_forward_paths;
 
         char       _cmd_buffer[512];
         int        _cmd_offset = 0;

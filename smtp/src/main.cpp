@@ -44,14 +44,11 @@ namespace ervan::smtp {
             co_return;
         }
 
-        if (!cfg.ensure<config_maxmessagesize>()) {
-            log::out << "Max message size is not set!";
-            co_return;
-        }
-
-        log::out << log::format("Listening as '{}'.", cfg.get<config_hostname>());
+        log::out << log::format("Listening as '{}' on port {} and {}.", cfg.get<config_hostname>(),
+                                cfg.get<config_port>(), cfg.get<config_submissionport>());
         log::out << log::format("Max message size: {} KiB.",
                                 cfg.get<config_maxmessagesize>() / 1024);
+        log::out << log::format("Max recipients per message: {}.", cfg.get<config_maxrcpt>());
 
         for (;;) {
             auto client_try = co_await sock.accept();
@@ -69,16 +66,6 @@ namespace ervan::smtp {
         dispatcher.spawn(handle_eipc, ep);
 
         co_await ep.request_async(FUNC_READCONFIG, cfg.key_list);
-
-        if (!cfg.ensure<config_port>()) {
-            log::out << "Port is not set!";
-            co_return;
-        }
-
-        if (!cfg.ensure<config_submissionport>()) {
-            log::out << "Submission port is not set!";
-            co_return;
-        }
 
         sockaddr_in addr = {};
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <initializer_list>
+#include <type_traits>
 
 #include <algorithm>
 #include <charconv>
@@ -25,16 +26,27 @@ namespace ervan {
         char name[N]{};
 
         constexpr config_name(const char (&str)[N]) {
-            std::copy_n(str, N, name);
+            std::copy_n(str, N, this->name);
         }
     };
 
-    template <config_key_id ID, typename T, config_name N>
+    template <typename T>
+    struct config_default {
+        T def;
+
+        constexpr config_default(T v) {
+            this->def = v;
+        }
+    };
+
+    template <config_key_id ID, typename T, config_name N, config_default v>
     struct config_entry {
-        static const config_key_id   id   = ID;
-        static constexpr config_name name = N;
+        static const config_key_id   id            = ID;
+        static constexpr config_name name          = N;
+        static constexpr T           default_value = v.def;
 
         using type       = T;
+        using const_type = const T;
         using shared_ptr = std::shared_ptr<T>;
 
         shared_ptr value;
@@ -44,14 +56,32 @@ namespace ervan {
         }
     };
 
-    struct config_hostname : config_entry<0, std::string, "hostname"> {};
-    struct config_port : config_entry<1, uint16_t, "port"> {};
-    struct config_submissionport : config_entry<2, uint16_t, "submissionport"> {};
-    struct config_debug : config_entry<3, bool, "debug"> {};
-    struct config_maxmessagesize : config_entry<4, size_t, "maxmessagesize"> {};
+    template <config_key_id ID, typename T, config_name N>
+    struct config_entry_required {
+        static const config_key_id   id            = ID;
+        static constexpr config_name name          = N;
+        static constexpr T           default_value = {};
+
+        using type       = T;
+        using const_type = const T;
+        using shared_ptr = std::shared_ptr<T>;
+
+        shared_ptr value;
+
+        operator config_key_id() const {
+            return this->id;
+        }
+    };
+
+    struct config_hostname : config_entry_required<0, std::string, "hostname"> {};
+    struct config_port : config_entry<1, uint16_t, "port", 25> {};
+    struct config_submissionport : config_entry<2, uint16_t, "submissionport", 587> {};
+    struct config_debug : config_entry<3, bool, "debug", false> {};
+    struct config_maxmessagesize : config_entry<4, size_t, "maxmessagesize", 33554432> {};
+    struct config_maxrcpt : config_entry<5, size_t, "maxrcpt", 256> {};
 
     using config_all = config<config_hostname, config_port, config_submissionport, config_debug,
-                              config_maxmessagesize>;
+                              config_maxmessagesize, config_maxrcpt>;
 
     template <typename... Args>
     struct config_key_list {
@@ -102,7 +132,9 @@ namespace ervan {
             static_assert(index != -1);
             static_assert(index < sizeof...(Keys));
 
-            return *(std::get<index>(_entries).value.get());
+            auto ptr = std::get<index>(_entries).value.get();
+
+            return ptr ? *(ptr) : K::default_value;
         }
 
         bool dump(int id, char* buffer, size_t len) {
@@ -203,16 +235,18 @@ namespace ervan {
             const int index = this->find_index<K::id, Keys...>();
 
             if (!std::get<index>(_entries).value)
-                return false;
+                return dump_write<typename K::type, typename K::const_type>(&K::default_value,
+                                                                            buffer, len);
 
             return dump_write(std::get<index>(_entries).value.get(), buffer, len);
         }
 
-        constexpr bool dump_write(std::string* val, char* buffer, size_t len) {
-            if (len < val->size() + 1)
+        template <typename T, typename U>
+        constexpr bool dump_write(U* val, char* buffer, size_t len) {
+            if (len < sizeof(U))
                 return false;
 
-            strncpy(buffer, val->c_str(), len);
+            *(reinterpret_cast<T*>(buffer)) = *val;
             return true;
         }
 
@@ -222,6 +256,14 @@ namespace ervan {
                 return false;
 
             *(reinterpret_cast<T*>(buffer)) = *val;
+            return true;
+        }
+
+        constexpr bool dump_write(std::string* val, char* buffer, size_t len) {
+            if (len < val->size() + 1)
+                return false;
+
+            strncpy(buffer, val->c_str(), len);
             return true;
         }
 

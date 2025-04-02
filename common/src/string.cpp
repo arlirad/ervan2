@@ -6,6 +6,13 @@
 #include <format>
 
 namespace ervan {
+    char base64_alphabet[]{
+        'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q',
+        'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
+        'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y',
+        'z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+', '/', '=',
+    };
+
     std::tuple<const char*, const char*, const char*, const char*, size_t, parse_result>
     get_config_pair(const char* buffer, size_t len, size_t offset) {
         while (isspace(buffer[offset]) && offset < len)
@@ -118,5 +125,66 @@ namespace ervan {
         static int counter = 0;
         return std::format("{}.{}.{}.{}.{}", prefix, getpid(), std::time(nullptr), counter++,
                            std::rand());
+    }
+
+    size_t base64_encode(span<const char> src, span<char> dst) {
+        size_t remaining  = src.size();
+        size_t src_offset = 0;
+        size_t dst_offset = 0;
+        char   buffer[4];
+
+        while (remaining >= 3) {
+            char a = src[src_offset + 0];
+            char b = src[src_offset + 1];
+            char c = src[src_offset + 2];
+
+            buffer[0] = base64_alphabet[((a & 0xFC) >> 2)];
+            buffer[1] = base64_alphabet[((a & 0x03) << 4) | ((b & 0xF0) >> 4)];
+            buffer[2] = base64_alphabet[((b & 0x0F) << 2) | ((c & 0xC0) >> 6)];
+            buffer[3] = base64_alphabet[((c & 0x3F) << 0)];
+
+            std::copy_n(buffer, 4, dst.begin() + dst_offset);
+
+            src_offset += 3;
+            dst_offset += 4;
+            remaining -= 3;
+        }
+
+        if (remaining >= 2) {
+            char a = src[src_offset + 0];
+            char b = src[src_offset + 1];
+
+            buffer[0] = base64_alphabet[((a & 0xFC) >> 2)];
+            buffer[1] = base64_alphabet[((a & 0x03) << 4) | ((b & 0xF0) >> 4)];
+            buffer[2] = base64_alphabet[((b & 0x0F) << 2)];
+            buffer[3] = base64_alphabet[64];
+
+            std::copy_n(buffer, 4, dst.begin() + dst_offset);
+
+            src_offset += 2;
+            dst_offset += 4;
+            remaining -= 2;
+        }
+
+        if (remaining >= 1) {
+            char a = src[src_offset + 0];
+
+            buffer[0] = base64_alphabet[((a & 0xFC) >> 2)];
+            buffer[1] = base64_alphabet[((a & 0x03) << 4)];
+            buffer[2] = base64_alphabet[64];
+            buffer[3] = base64_alphabet[64];
+
+            std::copy_n(buffer, 4, dst.begin() + dst_offset);
+
+            src_offset += 1;
+            dst_offset += 4;
+            remaining -= 1;
+        }
+
+        return dst_offset;
+    }
+
+    size_t base64_decode(span<const char> src, span<char> dst) {
+        return 0;
     }
 }

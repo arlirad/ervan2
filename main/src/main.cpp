@@ -131,9 +131,7 @@ namespace ervan::main {
         dispatcher.spawn([&mon]() -> eaio::coro<void> { co_await mon.loop(); });
         dispatcher.spawn(handle_eipc, ep, main_config);
 
-        if (main_config.ensure<config_debug>())
-            mon.debug(main_config.get<config_debug>());
-
+        mon.debug(main_config.get<config_debug>());
         mon.add("ervan.smtp", ervan::smtp::main_async);
 
         // dispatcher.spawn(interrupt_signal, dispatcher);

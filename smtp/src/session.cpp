@@ -3,6 +3,7 @@
 #include "ervan/config.hpp"
 #include "ervan/io.hpp"
 #include "ervan/log.hpp"
+#include "ervan/parse.hpp"
 #include "ervan/smtp.hpp"
 #include <sys/stat.h>
 
@@ -15,8 +16,10 @@ namespace ervan::smtp {
     }
 
     void session::reset() {
-        this->_state         = STATE_CMD;
-        this->_max_data_size = cfg.get<config_maxmessagesize>();
+        this->_state = STATE_CMD;
+
+        this->_max_data_size     = cfg.get<config_maxmessagesize>();
+        this->_max_forward_paths = cfg.get<config_maxrcpt>();
     }
 
     eaio::coro<void> session::call_command(span<char> sp) {
@@ -215,6 +218,18 @@ namespace ervan::smtp {
             co_return;
         }
 
+        this->_metadata = {};
+
+        auto cmd     = span<const char>(sp.begin(), sp.end());
+        auto reverse = parse::reverse_path(cmd);
+        if (!reverse) {
+            co_await this->reply(invalid_parameters);
+            co_return;
+        }
+
+        this->_metadata.reverse_path =
+            std::string(reverse.mailbox.local_part.body.begin(), reverse.mailbox.domain.body.end());
+
         co_await this->reply(ok);
     }
 
@@ -223,6 +238,21 @@ namespace ervan::smtp {
             co_await this->reply(invalid_parameters);
             co_return;
         }
+
+        if (this->_metadata.forward_paths.size() >= this->_max_forward_paths) {
+            co_await this->reply(too_many_recipients);
+            co_return;
+        }
+
+        auto cmd  = span<const char>(sp.begin(), sp.end());
+        auto path = parse::path(cmd);
+        if (!path) {
+            co_await this->reply(invalid_parameters);
+            co_return;
+        }
+
+        this->_metadata.forward_paths.push_back(
+            {path.mailbox.local_part.body.begin(), path.mailbox.domain.body.end()});
 
         co_await this->reply(ok);
     }
@@ -256,11 +286,11 @@ namespace ervan::smtp {
     }
 
     eaio::coro<void> session::finish_data() {
-        auto data_sync     = io::sync_file(this->_data_file);
-        auto metadata_sync = io::sync_file(this->_metadata_file);
+        auto write_metadata = this->_metadata.write_to(this->_metadata_file);
+        auto data_sync      = io::sync_file(this->_data_file);
 
         co_await data_sync;
-        co_await metadata_sync;
+        co_await write_metadata;
 
         this->_data_file.close();
         this->_data_file = {};

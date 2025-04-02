@@ -14,6 +14,8 @@ namespace ervan {
         PARSE_END,
     };
 
+    extern char base64_alphabet[65];
+
     template <typename T>
     struct span {
         T*     start;
@@ -48,6 +50,10 @@ namespace ervan {
 
         constexpr T& operator[](int index) const {
             return this->start[index];
+        }
+
+        constexpr span advance(size_t n) const {
+            return span(this->begin() + n, this->end());
         }
     };
 
@@ -133,4 +139,7 @@ namespace ervan {
     loop_result look(loop_state& state, span<const char> _src);
 
     std::string get_unique_filename(const char* prefix);
+
+    size_t base64_encode(span<const char> src, span<char> dst);
+    size_t base64_decode(span<const char> src, span<char> dst);
 }

@@ -40,9 +40,10 @@ namespace ervan::smtp {
     const smtp_reply<250, "OK">                                                  ok;
     const smtp_reply<354, "Start mail input; end with <CRLF>.<CRLF>">            start_data;
     const smtp_reply<451, "Requested action aborted: local error in processing"> local_error;
-    const smtp_reply<500, "Syntax error, command unrecognized">                  invalid_command;
-    const smtp_reply<500, "Line too long">                                       exceeded_line;
-    const smtp_reply<501, "Syntax error in parameters or arguments">             invalid_parameters;
+    const smtp_reply<452, "Too many recipients">                     too_many_recipients;
+    const smtp_reply<500, "Syntax error, command unrecognized">      invalid_command;
+    const smtp_reply<500, "Line too long">                           exceeded_line;
+    const smtp_reply<501, "Syntax error in parameters or arguments"> invalid_parameters;
     const smtp_reply<552, "Requested mail action aborted: exceeded storage allocation">
         exceeded_storage;
 
