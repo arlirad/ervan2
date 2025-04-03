@@ -173,6 +173,5 @@ namespace ervan::smtp {
     eaio::coro<void> handle(eaio::socket sock, eaio::dispatcher& d) {
         session session(sock, d);
         co_await session.handle();
-        // co_await std::suspend_always{};
     }
 }
