@@ -14,7 +14,7 @@
 #include <unistd.h>
 
 namespace ervan::main {
-    /*eaio::coro<void> interrupt_signal(eaio::dispatcher& d) {
+    eaio::coro<void> interrupt_signal(eaio::dispatcher& d, bool& done) {
         sigset_t mask;
 
         sigemptyset(&mask);
@@ -25,8 +25,10 @@ namespace ervan::main {
         auto signal = d.wrap<eaio::signal>(sfd);
 
         co_await signal.get();
-        log::out << "Got sigint.";
-    }*/
+        log::out << "Got SIGINT, closing...";
+
+        done = true;
+    }
 
     eaio::coro<void> handle_eipc(eipc::endpoint& ep, config_all& cfg) {
         for (;;) {
@@ -54,12 +56,12 @@ namespace ervan::main {
         }
     }
 
-    eaio::coro<void> reload_config(eaio::dispatcher& d, config_all& cfg) {
+    eaio::coro<bool> reload_config(eaio::dispatcher& d, config_all& cfg) {
         int fd = open(CONFIG_PATH, O_RDONLY);
         if (fd == -1) {
             log::out << log::format("Failed to open config ('{}'): {}.", CONFIG_PATH,
                                     strerror(errno));
-            co_return;
+            co_return false;
         }
 
         auto    handle    = d.wrap<eaio::file>(fd);
@@ -70,7 +72,7 @@ namespace ervan::main {
         auto result = co_await handle.read(buffer, file_size);
         if (!result) {
             log::out << result.perror("Failed to read config.");
-            co_return;
+            co_return false;
         }
 
         for (;;) {
@@ -104,6 +106,7 @@ namespace ervan::main {
         }
 
         delete buffer;
+        co_return true;
     }
 
     eaio::coro<int> main_async() {
@@ -116,6 +119,7 @@ namespace ervan::main {
         eipc::endpoint   ep("monitor->smtp");
         config_all       main_config;
         sigset_t         mask;
+        bool             done = false;
 
         sigemptyset(&mask);
         sigaddset(&mask, SIGCHLD);
@@ -126,17 +130,17 @@ namespace ervan::main {
 
         auto ep_handle = wrap_endpoint(dispatcher, ep);
 
-        co_await reload_config(dispatcher, main_config);
+        if (!co_await reload_config(dispatcher, main_config))
+            co_return 1;
 
         dispatcher.spawn([&mon]() -> eaio::coro<void> { co_await mon.loop(); });
         dispatcher.spawn(handle_eipc, ep, main_config);
+        dispatcher.spawn(interrupt_signal, dispatcher, done);
 
         mon.debug(main_config.get<config_debug>());
         mon.add("ervan.smtp", ervan::smtp::main_async);
 
-        // dispatcher.spawn(interrupt_signal, dispatcher);
-
-        for (;;)
+        while (!done)
             dispatcher.poll();
 
         co_return 0;
@@ -145,6 +149,9 @@ namespace ervan::main {
     extern "C" int main() {
         auto a = main_async();
         a.handle.resume();
+
+        log::out << "Ervan is terminating...";
+
         return a.get_value();
     }
 }
