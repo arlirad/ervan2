@@ -57,8 +57,8 @@ namespace ervan::smtp {
         int        _cmd_offset = 0;
         char       _line_buffer[1024];
         int        _line_offset = 0;
-        span<char> _cmd_span    = span(_cmd_buffer, sizeof(_cmd_buffer) - cmd_terminator.size());
-        span<char> _line_span   = span(_line_buffer, sizeof(_line_buffer) - cmd_terminator.size());
+        span<char> _cmd_span    = span(_cmd_buffer, sizeof(_cmd_buffer));
+        span<char> _line_span   = span(_line_buffer, sizeof(_line_buffer));
 
         bool _data_too_long;
         bool _line_too_long;
@@ -69,9 +69,9 @@ namespace ervan::smtp {
         bool mail_param(parse::esmtp_param_result& param);
         bool rcpt_param(parse::esmtp_param_result& param);
 
-        eaio::coro<void> feed(span<const char> sp);
-        eaio::coro<void> feed_cmd(span<const char> sp);
-        eaio::coro<void> feed_data(span<const char> sp);
+        eaio::coro<void>             feed(span<const char> sp);
+        eaio::coro<span<const char>> feed_cmd(span<const char> sp);
+        eaio::coro<span<const char>> feed_data(span<const char> sp);
 
         eaio::coro<void> call_command(span<char> sp);
         eaio::coro<void> ehlo(span<char> sp);

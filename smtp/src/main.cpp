@@ -77,16 +77,22 @@ namespace ervan::smtp {
         auto sock    = dispatcher.wrap<eaio::socket>(sock_fd);
 
         auto setsockopt_result = sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, true);
-        if (!setsockopt_result)
+        if (!setsockopt_result) {
             log::out << setsockopt_result.perror("setsockopt");
+            co_return;
+        }
 
         auto bind_result = sock.bind(addr);
-        if (!bind_result)
+        if (!bind_result) {
             log::out << bind_result.perror("bind");
+            co_return;
+        }
 
         auto listen_result = sock.listen(32);
-        if (!listen_result)
+        if (!listen_result) {
             log::out << listen_result.perror("listen");
+            co_return;
+        }
 
         dispatcher.spawn(listen, sock);
     }

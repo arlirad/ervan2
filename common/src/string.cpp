@@ -54,39 +54,38 @@ namespace ervan {
         buffer[buffer.size() - 1] = c;
     }
 
-    join_result join(span<char> _target, span<const char> _src, int& tgt_offset,
+    join_result join(span<char> _target, span<const char> src, int& tgt_offset,
                      span<const char> terminator) {
-        if (_src.size() == 0)
+        if (src.size() == 0)
             return {};
 
         auto target  = span(_target.begin(), _target.len - terminator.len);
-        auto src     = span(_src.begin(), std::min(target.len, _src.len));
         auto t_check = span(target.end(), _target.end());
 
-        size_t cpy_len = std::min(_target.len - tgt_offset, src.len);
+        size_t cpy_len = tgt_offset < target.len ? std::min(target.len - tgt_offset, src.len) : 0;
 
         // std::copy doesn't like mixing const with non const
         std::memcpy(target.begin() + tgt_offset, src.begin(), cpy_len);
 
-        for (int i = 0; i < _src.size(); i++) {
-            push_back(t_check, _src[i]);
+        for (int i = 0; i < src.size(); i++) {
+            push_back(t_check, src[i]);
 
             if (memcmp(t_check.begin(), terminator.begin(), t_check.size()) == 0) {
                 size_t target_len = tgt_offset - t_check.size() + 1;
                 tgt_offset        = 0;
 
                 if (target_len > target.size())
-                    return {std::errc::result_out_of_range, {_src.begin() + i + 1, _src.end()}};
+                    return {std::errc::result_out_of_range, {src.begin() + i + 1, src.end()}};
 
                 *(target.begin() + target_len) = '\0';
 
-                return {{target.begin(), target_len}, {_src.begin() + i + 1, _src.end()}};
+                return {{target.begin(), target_len}, {src.begin() + i + 1, src.end()}};
             }
 
             tgt_offset++;
         }
 
-        return {{}, {_src.end(), _src.end()}};
+        return {{}, {src.end(), src.end()}};
     }
 
     // TODO: this needs to be rewritten to be more generic

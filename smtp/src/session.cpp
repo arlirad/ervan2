@@ -13,10 +13,11 @@ namespace ervan::smtp {
     }
 
     eaio::coro<void> session::handle() {
+        char buffer[8192] = {};
+
         co_await this->send_greeter();
 
         while (this->_state != STATE_CLOSED) {
-            char buffer[8192];
             auto result = co_await this->_sock.recv(buffer, sizeof(buffer));
 
             if (!result) {
@@ -93,16 +94,18 @@ namespace ervan::smtp {
     }
 
     eaio::coro<void> session::feed(span<const char> sp) {
-        if (this->_state == STATE_CLOSED)
-            co_return;
+        while (sp.size() > 0) {
+            if (this->_state == STATE_CLOSED)
+                co_return;
 
-        if (_state == STATE_CMD)
-            co_await this->feed_cmd(sp);
-        else if (_state == STATE_DATA)
-            co_await this->feed_data(sp);
+            if (_state == STATE_CMD)
+                sp = co_await this->feed_cmd(sp);
+            else if (_state == STATE_DATA)
+                sp = co_await this->feed_data(sp);
+        }
     }
 
-    eaio::coro<void> session::feed_cmd(span<const char> sp) {
+    eaio::coro<span<const char>> session::feed_cmd(span<const char> sp) {
         auto result = join(this->_cmd_span, sp, _cmd_offset, cmd_terminator);
 
         if (result.sp.begin()) {
@@ -113,11 +116,10 @@ namespace ervan::smtp {
         if (result.ec == std::errc::result_out_of_range)
             co_await this->reply(exceeded_line);
 
-        if (result.rest.size() > 0)
-            co_await this->feed(result.rest);
+        co_return result.rest;
     }
 
-    eaio::coro<void> session::feed_data(span<const char> sp) {
+    eaio::coro<span<const char>> session::feed_data(span<const char> sp) {
         join_result result;
 
         while (true) {
@@ -165,12 +167,12 @@ namespace ervan::smtp {
             co_await this->_data_file.write(line.begin(), line.size());
         }
 
-        if (result.rest.size() > 0)
-            co_await this->feed(result.rest);
+        co_return result.rest;
     }
 
     eaio::coro<void> handle(eaio::socket sock, eaio::dispatcher& d) {
         session session(sock, d);
         co_await session.handle();
+        // co_await std::suspend_always{};
     }
 }
