@@ -3,6 +3,8 @@
 
 namespace ervan::smtp {
     eaio::coro<void> session::ehlo(span<char> sp) {
+        this->reset();
+
         auto hostname = cfg.get<config_hostname>();
         // auto size     = cfg.get<config_maxmessagesize>();
         // auto size_str = std::format("{}", size);
@@ -14,6 +16,16 @@ namespace ervan::smtp {
         /*co_await this->_sock.send("250 SIZE ", 9);
         co_await this->_sock.send(size_str.c_str(), size_str.size());
         co_await this->_sock.send("\r\n", 2);*/
+    }
+
+    eaio::coro<void> session::helo(span<char> sp) {
+        this->reset();
+
+        auto hostname = cfg.get<config_hostname>();
+
+        co_await this->_sock.send("250 ", 4);
+        co_await this->_sock.send(hostname.c_str(), hostname.size());
+        co_await this->_sock.send(" at your service\r\n", 18);
     }
 
     eaio::coro<void> session::mail(span<char> sp) {
@@ -54,9 +66,9 @@ namespace ervan::smtp {
         }
 
         this->_metadata = {};
-
         this->_metadata.reverse_path =
             std::string(reverse.mailbox.local_part.body.begin(), reverse.mailbox.domain.body.end());
+        this->_reverse_set = true;
 
         co_await this->reply(ok);
     }
@@ -75,6 +87,11 @@ namespace ervan::smtp {
     }
 
     eaio::coro<void> session::rcpt(span<char> sp) {
+        if (!this->_reverse_set) {
+            co_await this->reply(bad_sequence);
+            co_return;
+        }
+
         if (!accept(sp, "TO:")) {
             co_await this->reply(invalid_parameters);
             co_return;
@@ -103,6 +120,11 @@ namespace ervan::smtp {
     }
 
     eaio::coro<void> session::data(span<char> sp) {
+        if (!this->_reverse_set || this->_metadata.forward_paths.size() == 0) {
+            co_await this->reply(bad_sequence);
+            co_return;
+        }
+
         if (!co_await this->open_files()) {
             co_await this->reply(local_error);
             co_return;
@@ -114,6 +136,20 @@ namespace ervan::smtp {
         this->_line_too_long = false;
 
         co_await this->reply(start_data);
+    }
+
+    eaio::coro<void> session::rset(span<char> sp) {
+        this->reset();
+
+        co_await this->reply(ok);
+    }
+
+    eaio::coro<void> session::vrfy(span<char> sp) {
+        co_await this->reply(not_implemented);
+    }
+
+    eaio::coro<void> session::noop(span<char> sp) {
+        co_await this->reply(ok);
     }
 
     eaio::coro<void> session::quit(span<char> sp) {

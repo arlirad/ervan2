@@ -44,6 +44,8 @@ namespace ervan::smtp {
     const smtp_reply<500, "Syntax error, command unrecognized">      invalid_command;
     const smtp_reply<500, "Line too long">                           exceeded_line;
     const smtp_reply<501, "Syntax error in parameters or arguments"> invalid_parameters;
+    const smtp_reply<502, "Command not implemented">                 not_implemented;
+    const smtp_reply<503, "Bad sequence of commands">                bad_sequence;
     const smtp_reply<552, "Requested mail action aborted: exceeded storage allocation">
         exceeded_storage;
 

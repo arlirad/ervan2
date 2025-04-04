@@ -46,6 +46,7 @@ namespace ervan::smtp {
         state             _state;
 
         metadata _metadata;
+        bool     _reverse_set;
 
         size_t      _max_data_size;
         size_t      _data_size;
@@ -61,6 +62,7 @@ namespace ervan::smtp {
         span<char> _line_span   = span(_line_buffer, sizeof(_line_buffer));
 
         bool _data_too_long;
+        bool _data_error;
         bool _line_too_long;
 
         void reset();
@@ -75,19 +77,25 @@ namespace ervan::smtp {
 
         eaio::coro<void> call_command(span<char> sp);
         eaio::coro<void> ehlo(span<char> sp);
+        eaio::coro<void> helo(span<char> sp);
         eaio::coro<void> mail(span<char> sp);
         eaio::coro<void> rcpt(span<char> sp);
         eaio::coro<void> data(span<char> sp);
+        eaio::coro<void> rset(span<char> sp);
+        eaio::coro<void> vrfy(span<char> sp);
+        eaio::coro<void> noop(span<char> sp);
         eaio::coro<void> quit(span<char> sp);
 
         eaio::coro<void> send_greeter();
         eaio::coro<void> reply(const char* str, size_t len);
 
         eaio::coro<bool> open_files();
-        eaio::coro<void> write_header_space();
-        eaio::coro<void> write_data_tar_header(size_t length);
-        eaio::coro<void> write_metadata_tar_header(size_t length);
-        eaio::coro<void> pad_data();
+        eaio::coro<bool> trace_data();
+        eaio::coro<bool> write_header_space();
+        eaio::coro<bool> write_data_tar_header(size_t length);
+        eaio::coro<bool> write_metadata_tar_header(size_t length);
+        eaio::coro<bool> pad_data();
+        eaio::coro<void> write_data_to_disk();
         eaio::coro<void> finish_data();
         eaio::coro<void> abort_data();
 
@@ -97,8 +105,10 @@ namespace ervan::smtp {
         }
 
         using cmds =
-            std::tuple<smtp_command<"EHLO", &session::ehlo>, smtp_command<"MAIL", &session::mail>,
-                       smtp_command<"RCPT", &session::rcpt>, smtp_command<"DATA", &session::data>,
+            std::tuple<smtp_command<"EHLO", &session::ehlo>, smtp_command<"HELO", &session::helo>,
+                       smtp_command<"MAIL", &session::mail>, smtp_command<"RCPT", &session::rcpt>,
+                       smtp_command<"DATA", &session::data>, smtp_command<"RSET", &session::rset>,
+                       smtp_command<"VRFY", &session::vrfy>, smtp_command<"NOOP", &session::noop>,
                        smtp_command<"QUIT", &session::quit>>;
         cmds _commands;
 

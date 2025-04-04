@@ -40,6 +40,8 @@ namespace ervan::smtp {
 
         this->_max_data_size     = cfg.get<config_maxmessagesize>();
         this->_max_forward_paths = cfg.get<config_maxrcpt>();
+        this->_metadata          = {};
+        this->_reverse_set       = false;
     }
 
     bool session::accept(span<char>& sp, const char* str) {
@@ -155,7 +157,7 @@ namespace ervan::smtp {
             if (this->_data_size > this->_max_data_size)
                 this->_data_too_long = true;
 
-            if (this->_line_too_long || this->_data_too_long)
+            if (this->_line_too_long || this->_data_too_long || this->_data_error)
                 continue;
 
             *(line.end() + 0) = '\r';
@@ -164,7 +166,8 @@ namespace ervan::smtp {
 
             line = span(line.begin(), line.end() + 2);
 
-            co_await this->_data_file.write(line.begin(), line.size());
+            if (!co_await this->_data_file.write(line.begin(), line.size()))
+                this->_data_error = true;
         }
 
         co_return result.rest;

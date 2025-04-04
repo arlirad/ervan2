@@ -14,6 +14,6 @@ namespace ervan {
         std::string              reverse_path;
         std::vector<std::string> forward_paths;
 
-        eaio::coro<void> write_to(eaio::file& file);
+        eaio::coro<bool> write_to(eaio::file& file);
     };
 }

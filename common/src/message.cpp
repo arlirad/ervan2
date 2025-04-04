@@ -4,7 +4,7 @@
 #include "ervan/string.hpp"
 
 namespace ervan {
-    eaio::coro<void> metadata::write_to(eaio::file& file) {
+    eaio::coro<bool> metadata::write_to(eaio::file& file) {
         const size_t line_len    = sizeof(this->line_a);
         const size_t line_len_64 = (((line_len + (line_len) / 3) + 3) / 4) * 4;
 
@@ -20,14 +20,23 @@ namespace ervan {
             buffer[(line_len_64 + 2) * i - 1] = '\n';
         }
 
-        co_await file.write(buffer, sizeof(buffer));
+        if (!co_await file.write(buffer, sizeof(buffer)))
+            co_return false;
 
-        co_await file.write(this->reverse_path.c_str(), this->reverse_path.size());
-        co_await file.write("\r\n", 2);
+        if (!co_await file.write(this->reverse_path.c_str(), this->reverse_path.size()))
+            co_return false;
+
+        if (!co_await file.write("\r\n", 2))
+            co_return false;
 
         for (auto path : this->forward_paths) {
-            co_await file.write(path.c_str(), path.size());
-            co_await file.write("\r\n", 2);
+            if (!co_await file.write(path.c_str(), path.size()))
+                co_return false;
+
+            if (!co_await file.write("\r\n", 2))
+                co_return false;
         }
+
+        co_return true;
     }
 }
