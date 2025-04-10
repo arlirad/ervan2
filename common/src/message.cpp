@@ -23,6 +23,12 @@ namespace ervan {
         if (!co_await file.write(buffer, sizeof(buffer)))
             co_return false;
 
+        if (!co_await file.write(this->from.c_str(), this->from.size()))
+            co_return false;
+
+        if (!co_await file.write("\r\n", 2))
+            co_return false;
+
         if (!co_await file.write(this->reverse_path.c_str(), this->reverse_path.size()))
             co_return false;
 

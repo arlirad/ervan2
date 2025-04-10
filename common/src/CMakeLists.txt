@@ -6,5 +6,6 @@ target_sources(common PRIVATE
     log.cpp 
     message.cpp 
     parse.cpp 
+    rfc5322.cpp 
     string.cpp
 )

@@ -3,7 +3,23 @@
 
 namespace ervan::smtp {
     eaio::coro<void> session::ehlo(span<char> sp) {
+        auto cmd    = span<const char>(sp.begin(), sp.end());
+        auto domain = parse::domain(cmd);
+        if (!domain) {
+            // auto address = parse::address_literal(cmd);
+            // if (!address) {
+            // co_await this->reply(invalid_parameters);
+            // co_return;
+            // }
+
+            co_await this->reply(invalid_parameters);
+            co_return;
+        }
+
         this->reset();
+
+        this->_metadata.from = {domain.body.begin(), domain.body.end()};
+        this->_session_begun = true;
 
         auto hostname = cfg.get<config_hostname>();
         // auto size     = cfg.get<config_maxmessagesize>();
@@ -19,7 +35,17 @@ namespace ervan::smtp {
     }
 
     eaio::coro<void> session::helo(span<char> sp) {
+        auto cmd    = span<const char>(sp.begin(), sp.end());
+        auto domain = parse::domain(cmd);
+        if (!domain) {
+            co_await this->reply(invalid_parameters);
+            co_return;
+        }
+
         this->reset();
+
+        this->_metadata.from = {domain.body.begin(), domain.body.end()};
+        this->_session_begun = true;
 
         auto hostname = cfg.get<config_hostname>();
 
@@ -38,6 +64,11 @@ namespace ervan::smtp {
         auto reverse = parse::reverse_path(cmd);
         if (!reverse) {
             co_await this->reply(invalid_parameters);
+            co_return;
+        }
+
+        if (this->_reverse_set || !this->_session_begun) {
+            co_await this->reply(bad_sequence);
             co_return;
         }
 
@@ -65,9 +96,9 @@ namespace ervan::smtp {
             cmd = parameter.rest;
         }
 
-        this->_metadata = {};
         this->_metadata.reverse_path =
             std::string(reverse.mailbox.local_part.body.begin(), reverse.mailbox.domain.body.end());
+        this->_metadata.forward_paths.clear();
         this->_reverse_set = true;
 
         co_await this->reply(ok);
@@ -87,13 +118,13 @@ namespace ervan::smtp {
     }
 
     eaio::coro<void> session::rcpt(span<char> sp) {
-        if (!this->_reverse_set) {
-            co_await this->reply(bad_sequence);
+        if (!accept(sp, "TO:")) {
+            co_await this->reply(invalid_parameters);
             co_return;
         }
 
-        if (!accept(sp, "TO:")) {
-            co_await this->reply(invalid_parameters);
+        if (!this->_session_begun) {
+            co_await this->reply(bad_sequence);
             co_return;
         }
 

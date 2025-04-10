@@ -2,7 +2,10 @@
 #include "ervan/smtp/session.hpp"
 #include <sys/stat.h>
 
+#include <chrono>
+#include <ctime>
 #include <fcntl.h>
+#include <time.h>
 
 namespace ervan::smtp {
     eaio::coro<bool> session::open_files() {
@@ -19,6 +22,54 @@ namespace ervan::smtp {
         this->_data_file = this->_d.wrap<eaio::file>(fd_data);
 
         if (!co_await this->write_header_space())
+            co_return false;
+
+        if (!co_await this->write_trace_info())
+            co_return false;
+
+        co_return true;
+    }
+
+    eaio::coro<bool> session::write_trace_info() {
+        rfc5322::writer writer(this->_data_file);
+
+        if (!co_await writer.begin_header("Received"))
+            co_return false;
+
+        if (false) {
+            if (!co_await writer.write_body_part("from"))
+                co_return false;
+
+            if (!co_await writer.write_body_part(this->_metadata.from.c_str()))
+                co_return false;
+
+            char address_buffer[64];
+
+            strncpy(address_buffer, "([127.0.0.1])", sizeof(address_buffer) - 1);
+            address_buffer[sizeof(address_buffer) - 1] = '\0';
+
+            if (!co_await writer.write_body_part(address_buffer))
+                co_return false;
+        }
+
+        if (!co_await writer.write_body_part("by"))
+            co_return false;
+
+        if (!co_await writer.write_body_part(cfg.get<config_hostname>().c_str()))
+            co_return false;
+
+        if (!co_await writer.write_body_part(";", false))
+            co_return false;
+
+        tm   buf;
+        auto now    = std::chrono::system_clock::now();
+        auto now_c  = std::chrono::system_clock::to_time_t(now);
+        auto now_tm = localtime_r(&now_c, &buf);
+
+        if (!co_await writer.write_time(now_tm))
+            co_return false;
+
+        if (!co_await writer.end_header())
             co_return false;
 
         co_return true;

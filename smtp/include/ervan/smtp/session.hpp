@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ervan/message.hpp"
+#include "ervan/rfc5322.hpp"
 #include "ervan/smtp.hpp"
 #include "ervan/smtp/types.hpp"
 #include "ervan/string.hpp"
@@ -47,6 +48,7 @@ namespace ervan::smtp {
 
         metadata _metadata;
         bool     _reverse_set;
+        bool     _session_begun;
 
         size_t      _max_data_size;
         size_t      _data_size;
@@ -56,7 +58,7 @@ namespace ervan::smtp {
 
         char       _cmd_buffer[512];
         int        _cmd_offset = 0;
-        char       _line_buffer[1024];
+        char       _line_buffer[rfc5322::max_line_length + 2 + 24];
         int        _line_offset = 0;
         span<char> _cmd_span    = span(_cmd_buffer, sizeof(_cmd_buffer));
         span<char> _line_span   = span(_line_buffer, sizeof(_line_buffer));
@@ -90,12 +92,11 @@ namespace ervan::smtp {
         eaio::coro<void> reply(const char* str, size_t len);
 
         eaio::coro<bool> open_files();
-        eaio::coro<bool> trace_data();
+        eaio::coro<bool> write_trace_info();
         eaio::coro<bool> write_header_space();
         eaio::coro<bool> write_data_tar_header(size_t length);
         eaio::coro<bool> write_metadata_tar_header(size_t length);
         eaio::coro<bool> pad_data();
-        eaio::coro<void> write_data_to_disk();
         eaio::coro<void> finish_data();
         eaio::coro<void> abort_data();
 

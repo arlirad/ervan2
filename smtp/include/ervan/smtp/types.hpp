@@ -52,6 +52,4 @@ namespace ervan::smtp {
     const span<const char> cmd_terminator    = span("\r\n", 2);
     const span<const char> data_terminator   = span("\r\n.\r\n", 5);
     const span<const char> terminator_escape = span("\r\n..", 4);
-
-    const size_t max_line_length = 1000;
 }

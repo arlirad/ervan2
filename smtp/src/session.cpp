@@ -10,6 +10,7 @@
 namespace ervan::smtp {
     session::session(eaio::socket& sock, eaio::dispatcher& d) : _sock(sock), _d(d) {
         this->reset();
+        this->_session_begun = false;
     }
 
     eaio::coro<void> session::handle() {
@@ -21,7 +22,7 @@ namespace ervan::smtp {
             auto result = co_await this->_sock.recv(buffer, sizeof(buffer));
 
             if (!result) {
-                log::out << result.perror("recv");
+                log::out << result.perror("recv failed");
                 break;
             }
 
@@ -151,7 +152,7 @@ namespace ervan::smtp {
 
             this->_data_size += line.size() + 2;
 
-            if (line.size() > max_line_length - 2)
+            if (line.size() > rfc5322::max_line_length - 2)
                 this->_line_too_long = true;
 
             if (this->_data_size > this->_max_data_size)

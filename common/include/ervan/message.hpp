@@ -11,6 +11,7 @@ namespace ervan {
         char line_c[32] = {};
         char line_d[32] = {};
 
+        std::string              from;
         std::string              reverse_path;
         std::vector<std::string> forward_paths;
 
